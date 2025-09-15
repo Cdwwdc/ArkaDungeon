@@ -3,153 +3,122 @@ using UnityEngine;
 
 public class BallManager : MonoBehaviour
 {
-    [Header("참조")]
-    public GameManager gameManager;
-    public GameObject ballPrefab;
-    public Transform ballSpawn;  // 없어도 됨: 패들 위 폴백
-    public Transform paddle;
+    [Header("참조(없으면 자동 탐색)")]
+    public GameManager gm;
 
-    [Header("설정")]
-    public int maxBalls = 4;
-    public string ballTag = "Ball";
-    public string ballLayerName = "Ball"; // Project Settings > Tags and Layers 에서 생성 추천
+    [Header("멀티볼 설정")]
+    [Tooltip("아이템으로 추가 생성 시 각도 오프셋(도)")]
+    public float splitAngle = 12f;
 
-    readonly List<GameObject> balls = new List<GameObject>();
-    bool collisionIgnored = false;
+    // 등록은 느슨하게: Spawn 시 Register, ClearAll 시 비움. 안전을 위해 Count는 태그 스캔.
+    private readonly HashSet<GameObject> set = new HashSet<GameObject>();
+    private int lastCount = 0;
 
-    void EnsureIgnoreBallBall()
+    void Awake()
     {
-        if (collisionIgnored) return;
-        int L = LayerMask.NameToLayer(ballLayerName);
-        if (L >= 0)
-        {
-            Physics2D.IgnoreLayerCollision(L, L, true);
-            collisionIgnored = true;
-        }
+        if (!gm) gm = FindObjectOfType<GameManager>();
     }
 
-    void SetupBallGO(GameObject b)
+    // 매 프레임 라스트볼 체크(파괴 타이밍 race 방지)
+    void LateUpdate()
     {
-        if (!b) return;
-        EnsureIgnoreBallBall();
-
-        // 태그/레이어 보정
-        if (!string.IsNullOrEmpty(ballTag)) b.tag = ballTag;
-        int L = LayerMask.NameToLayer(ballLayerName);
-        if (L >= 0) b.layer = L;
-    }
-
-    // 스폰 폴백: ballSpawn 없으면 패들 위로, 다 없으면 (0,0)
-    Vector3 GetSpawnPosition()
-    {
-        if (ballSpawn) return ballSpawn.position;
-        if (paddle) return paddle.position + Vector3.up * 0.35f;
-        return Vector3.zero;
-    }
-
-    public void InitIfNeeded()
-    {
-        if (balls.Count > 0) return;
-
-        // 내 슬롯 비어있으면 GM에서라도 가져와서 써준다 (Fail-safe)
-        if (!ballPrefab && gameManager && gameManager.ballPrefab)
+        if (gm == null || gm.isTransitioning || gm.IsContinueShown())
         {
-            ballPrefab = gameManager.ballPrefab;
-            Debug.LogWarning("[BallManager] ballPrefab 비어있어 GameManager.ballPrefab 사용");
-        }
-
-        if (!ballPrefab)
-        {
-            Debug.LogError("[BallManager] ballPrefab 미설정 → 공 생성 불가");
+            lastCount = ActiveCount();
             return;
         }
 
-        var b = Instantiate(ballPrefab, GetSpawnPosition(), Quaternion.identity);
-        SetupBallGO(b);
-        balls.Add(b);
-
-        if (!b.activeSelf)
-            Debug.LogWarning("[BallManager] 생성된 Ball이 Inactive입니다. 프리팹 루트를 Active로 바꿔주세요.");
-    }
-
-    public void ClearAll()
-    {
-        foreach (var b in balls) if (b) Destroy(b);
-        balls.Clear();
+        int count = ActiveCount();
+        if (lastCount > 0 && count == 0)
+        {
+            gm.ShowContinue(); // 마지막 공이 떨어진 시점에만 컨티뉴
+        }
+        lastCount = count;
     }
 
     public int ActiveCount()
     {
-        int c = 0;
-        foreach (var b in balls) if (b && b.activeInHierarchy) c++;
-        return c;
+        // 태그 스캔이 레이스에 강함(수량도 많지 않은 게임)
+        return GameObject.FindGameObjectsWithTag("Ball").Length;
     }
 
-    public void OnBallLost(GameObject ball)
+    public void Register(GameObject ball)
     {
-        if (ball != null) ball.SetActive(false);
-
-        if (ActiveCount() > 0) return; // 아직 살아있는 볼이 있으면 계속
-
-        gameManager?.OnBallDeath();
+        if (ball) set.Add(ball);
     }
 
-    public void PowerUp_MultiBall()
+    public void ClearAll()
     {
-        List<GameObject> alive = new List<GameObject>();
-        foreach (var b in balls) if (b && b.activeInHierarchy) alive.Add(b);
+        foreach (var b in set) if (b) Object.Destroy(b);
+        set.Clear();
 
-        if (alive.Count == 0)
-        {
-            InitIfNeeded();
-            alive.Clear();
-            foreach (var b in balls) if (b && b.activeInHierarchy) alive.Add(b);
-        }
-
-        int target = Mathf.Min(maxBalls, NextPowerCount(alive.Count)); // 1→2→4
-        int need = target - alive.Count;
-        if (need <= 0) return;
-
-        int spawned = 0;
-        int idx = 0;
-        while (spawned < need && alive.Count > 0)
-        {
-            var src = alive[idx % alive.Count];
-            if (src)
-            {
-                var clone = Instantiate(ballPrefab, src.transform.position, Quaternion.identity);
-                SetupBallGO(clone);
-                balls.Add(clone);
-
-                var rb = clone.GetComponent<Rigidbody2D>();
-                var srcRb = src.GetComponent<Rigidbody2D>();
-                if (rb && srcRb)
-                {
-                    Vector2 dir = srcRb.velocity.normalized;
-                    float deg = (spawned % 2 == 0) ? +12f : -12f;
-                    float rad = deg * Mathf.Deg2Rad;
-                    float cs = Mathf.Cos(rad);
-                    float sn = Mathf.Sin(rad);
-                    dir = new Vector2(dir.x * cs - dir.y * sn, dir.x * sn + dir.y * cs);
-                    float spd = srcRb.velocity.magnitude;
-                    rb.velocity = dir * spd;
-                }
-                spawned++;
-            }
-            idx++;
-        }
-    }
-
-    int NextPowerCount(int current)
-    {
-        if (current <= 1) return 2;
-        if (current <= 2) return 4;
-        return current;
+        // 혹시 태그 스캔으로 남은 것이 있으면 안전 청소
+        var leftovers = GameObject.FindGameObjectsWithTag("Ball");
+        foreach (var b in leftovers) if (b) Object.Destroy(b);
     }
 
     public void ResetForNewRoom()
     {
-        ClearAll();
-        InitIfNeeded();
+        set.Clear();
+        lastCount = 0;
+    }
+    public void PowerUp_MultiBall()
+    {
+        // 기준 위치를 못 받으면 패들 위치 기준
+        Vector3 refPos = gm && gm.paddle ? gm.paddle.position : Vector3.zero;
+        AddOneFromNearestTo(refPos);
+    }
+
+    public void PowerUp_MultiBall(Vector3 refPos)
+    {
+        AddOneFromNearestTo(refPos);
+    }
+
+    public void PowerUp_MultiBall(Transform t)
+    {
+        if (t) AddOneFromNearestTo(t.position);
+        else PowerUp_MultiBall();
+    }
+
+    public void PowerUp_MultiBall(GameObject go)
+    {
+        if (go) AddOneFromNearestTo(go.transform.position);
+        else PowerUp_MultiBall();
+    }
+    // ===== 아이템: 현재 '가장 가까운' 공에서 1개 추가 =====
+    public void AddOneFromNearestTo(Vector3 refPos)
+    {
+        var nearest = FindNearestBall(refPos);
+        if (nearest == null || gm == null) return;
+
+        var rb = nearest.GetComponent<Rigidbody2D>();
+        Vector2 dir = rb && rb.velocity.sqrMagnitude > 0.001f ? rb.velocity.normalized : Vector2.up;
+        float speed = rb ? rb.velocity.magnitude : 8f;
+
+        // 새 공은 splitAngle만큼 틀어서 생성(겹침 방지)
+        Vector2 dir2 = RotateDeg(dir, splitAngle);
+        gm.SpawnBallAt(nearest.transform.position, dir2, speed);
+    }
+
+    GameObject FindNearestBall(Vector3 p)
+    {
+        GameObject best = null;
+        float bestD = float.MaxValue;
+        var balls = GameObject.FindGameObjectsWithTag("Ball");
+        foreach (var b in balls)
+        {
+            if (!b) continue;
+            float d = (b.transform.position - p).sqrMagnitude;
+            if (d < bestD) { bestD = d; best = b; }
+        }
+        return best;
+    }
+
+    static Vector2 RotateDeg(Vector2 v, float deg)
+    {
+        float rad = deg * Mathf.Deg2Rad;
+        float cs = Mathf.Cos(rad);
+        float sn = Mathf.Sin(rad);
+        return new Vector2(v.x * cs - v.y * sn, v.x * sn + v.y * cs);
     }
 }

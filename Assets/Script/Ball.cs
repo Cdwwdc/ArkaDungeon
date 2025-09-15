@@ -106,11 +106,6 @@ public class Ball : MonoBehaviour
             || Mathf.Abs(Vector2.Dot(d, d2)) > dot;
     }
 
-    public void ResetLaunchPhase()
-    {
-        hasHitOnce = false;  // 출발 단계로 되돌림 → launchMinSpeed 규칙 적용
-    }
-
     static Vector2 RotateDeg(Vector2 v, float deg)
     {
         float rad = deg * Mathf.Deg2Rad;
@@ -131,4 +126,14 @@ public class Ball : MonoBehaviour
         float newX = Mathf.Sign(d.x == 0 ? 1f : d.x) * Mathf.Sqrt(Mathf.Max(0.0001f, 1f - minVerticalDot * minVerticalDot));
         return new Vector2(newX, newY).normalized;
     }
+    // Ball.cs 클래스 본문 안에 추가
+    public void ResetLaunchPhase()
+    {
+        // 첫 충돌 전 상태로 되돌림 → 느린 출발 규칙(launchMinSpeed)이 다시 적용됨
+        hasHitOnce = false;
+
+        // 혹시 첫 충돌 이후 가속 누적을 따로 쓰고 있다면 여기도 0으로 초기화
+        // hitBoost = 0f;   // <-- 이런 변수 쓰고 있다면 주석 해제 (없으면 그대로 두기)
+    }
+
 }

@@ -24,8 +24,14 @@ public class PaddleController : MonoBehaviour
 
     float xVel;
 
+    // 입력 잠금(컨티뉴 등에서 패들 멈춤)
+    bool _inputEnabled = true;
+    public void SetInputEnabled(bool enabled) { _inputEnabled = enabled; }
+
     void Update()
     {
+        if (!_inputEnabled) return;
+
         // 목표 X 계산
         float targetX;
         if (Input.GetMouseButton(0))
@@ -71,10 +77,8 @@ public class PaddleController : MonoBehaviour
         dir.x += xVel * paddleVelInfluence * 0.01f;
         dir = dir.normalized;
 
-        // 최소 상승각 보장(있으면 Ball의 함수 사용)
-        var ball = col.collider.GetComponent<Ball>();
-        if (ball != null) dir = ball.EnsureMinVertical(dir);
-        else dir = EnsureMinVerticalLocal(dir, minVerticalDot);
+        // 최소 상승각 보장(로컬 헬퍼 사용: Ball 타입 의존 제거)
+        dir = EnsureMinVerticalLocal(dir, minVerticalDot);
 
         float speed = Mathf.Clamp(rb.velocity.magnitude, minSpeed, maxSpeed);
         rb.velocity = dir * speed;
