@@ -2,43 +2,68 @@ using UnityEngine;
 
 public class Brick : MonoBehaviour
 {
-    [Header("기본 체력")]
-    public int hp = 1;
+    [Header("브릭 설정")]
+    public int hitPoints = 1;            // 체력 (1=한 번에 파괴)
+    public int score = 10;               // 점수(선택)
+    public bool destroyOnAnyHit = false; // 모든 충돌에 바로 파괴
 
-    // RoomController 참조(Init로 주입)
-    private RoomController room;
+    [Header("이펙트(옵션)")]
+    public ParticleSystem breakFx;       // 파괴 이펙트(없어도 됨)
+    public AudioSource breakSfx;         // 사운드(없어도 됨)
 
-    /// <summary>
-    /// RoomController가 Instantiate 직후 호출해서 소유자 주입
-    /// </summary>
-    public void Init(RoomController owner, int hpOverride = -1)
+    [Header("아이템 드롭")]
+    public GameObject powerUpPrefab;     // PowerUpItem 프리팹
+    [Range(0f, 1f)] public float dropChance = 0.2f;
+
+    // 내부
+    RoomController room;
+    bool isBreaking = false;             // 중복 파괴 방지
+
+    // RoomController가 생성 시 호출
+    public void Init(RoomController rc)
     {
-        room = owner;
-        if (hpOverride > 0) hp = hpOverride;
+        room = rc;
+        isBreaking = false;
     }
 
     void OnCollisionEnter2D(Collision2D col)
     {
-        // 공이 아닐 땐 무시
         if (!col.collider.CompareTag("Ball")) return;
+
+        if (destroyOnAnyHit) { Break(); return; }
         Hit(1);
     }
 
     public void Hit(int dmg)
     {
-        hp -= Mathf.Max(1, dmg);
-        if (hp <= 0) Break();
+        if (isBreaking) return;
+        hitPoints -= Mathf.Max(1, dmg);
+        if (hitPoints <= 0) Break();
     }
 
-    void Break()
+    public void Break()
     {
-        // 안전: room이 없으면 경고만 하고 진행
-        if (room != null) room.NotifyBrickDestroyed();
-        else Debug.LogWarning("Brick: room reference is null. Did you call Init(this)?");
+        if (isBreaking) return;
+        isBreaking = true;
 
-        // (선택) 파편 연출 프리팹 생성 자리
-        // if (debrisPrefab) { var d = Instantiate(debrisPrefab, transform.position, Quaternion.identity); Destroy(d, 2f); }
+        // 이펙트/사운드
+        if (breakFx)
+        {
+            var fx = Instantiate(breakFx, transform.position, Quaternion.identity);
+            fx.Play();
+            Destroy(fx.gameObject, fx.main.duration + 0.5f);
+        }
+        if (breakSfx) breakSfx.Play();
 
+        // 드롭
+        if (powerUpPrefab && Random.value < dropChance)
+        {
+            Instantiate(powerUpPrefab, transform.position, Quaternion.identity);
+        }
+
+        // 파괴 및 알림
         Destroy(gameObject);
+        if (room != null) room.NotifyBrickDestroyed();
+        else Debug.LogWarning("[Brick] room 참조가 없음(Init 누락?)");
     }
 }

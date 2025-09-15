@@ -3,10 +3,23 @@
 [RequireComponent(typeof(Rigidbody2D))]
 public class Ball : MonoBehaviour
 {
-    [Header("속도")]
-    public float startSpeed = 8f;
+    [Header("속도(기본)")]
+    [Tooltip("출발 시 속도(최초 발사/리스폰 시)")]
+    public float startSpeed = 6f;
+    [Tooltip("첫 충돌 이후 유지할 최소 속도(런닝 최소속도)")]
     public float minSpeed = 6f;
+    [Tooltip("최대 속도")]
     public float maxSpeed = 14f;
+
+    [Header("출발 단계(첫 충돌 전)")]
+    [Tooltip("첫 충돌 전 최소 속도(출발 단계에서만 적용). 낮출수록 출발이 더 느려짐")]
+    public float launchMinSpeed = 3f;
+    [Tooltip("첫 충돌이 발생한 순간 이 값 이상으로 즉시 올림(0이면 비활성)")]
+    public float speedAfterFirstHit = 8f;
+
+    [Header("충돌 가속(선택)")]
+    [Tooltip("첫 충돌 이후, 매 충돌마다 추가로 붙일 속도 증분(0이면 가속 없음)")]
+    public float hitSpeedGain = 0f;
 
     [Header("각도 고착 회피 (충돌 시에만 보정)")]
     [Tooltip("수직/수평에 너무 가까우면 회피 (0~1)")]
@@ -21,38 +34,59 @@ public class Ball : MonoBehaviour
     public float minVerticalDot = 0.40f; // 0.35~0.45 추천
 
     private Rigidbody2D rb;
+    private bool hasHitOnce = false;
 
     void Awake() => rb = GetComponent<Rigidbody2D>();
 
     void Start()
     {
-        // 초기 각도: 위쪽 대각(좌/우 랜덤) + 살짝 틀기
+        // GameManager가 이미 속도를 줬다면 존중
+        if (rb != null && rb.velocity.sqrMagnitude > 0.001f) return;
+
+        // 자체 발사 벡터
         float sx = Random.value < 0.5f ? -1f : 1f;
         Vector2 dir = new Vector2(sx, 1f).normalized;
         dir = RotateDeg(dir, Random.Range(-10f, 10f));
-        rb.velocity = dir * startSpeed;
-        // 권장: GravityScale=0, CollisionDetection=Continuous, Interpolate=Interpolate
+        rb.velocity = dir * Mathf.Clamp(startSpeed, 0f, maxSpeed);
     }
 
     void FixedUpdate()
     {
-        // 속도만 클램프 (각도는 건드리지 않음)
-        float spd = Mathf.Clamp(rb.velocity.magnitude, minSpeed, maxSpeed);
-        rb.velocity = rb.velocity.normalized * spd;
+        if (rb == null) return;
+
+        // 출발 단계/첫 충돌 이후에 따라 "최소속도"를 다르게 적용
+        float targetMin = hasHitOnce ? minSpeed : launchMinSpeed;
+        float spd = Mathf.Clamp(rb.velocity.magnitude, targetMin, maxSpeed);
+        rb.velocity = rb.velocity.sqrMagnitude > 0.0001f ? rb.velocity.normalized * spd : rb.velocity;
     }
 
     void OnCollisionEnter2D(Collision2D col)
     {
-        // 충돌 순간에만 보정
-        Vector2 dir = rb.velocity.normalized;
+        if (rb == null) return;
+
+        // 각도 보정
+        Vector2 dir = rb.velocity.sqrMagnitude > 0.0001f ? rb.velocity.normalized : Vector2.up;
 
         if (IsAxisLocked(dir, axisLockDot) || IsDiagonalLocked(dir, diagLockDot))
             dir = RotateDeg(dir, Random.Range(-nudgeDegrees, nudgeDegrees));
 
-        // ★ 수평 루프 방지: 최소 상승각 강제
+        // 수평 루프 방지
         dir = EnsureMinVertical(dir);
 
-        rb.velocity = dir * Mathf.Clamp(rb.velocity.magnitude, minSpeed, maxSpeed);
+        // 속도 가변: 첫 충돌 시 점프업, 이후엔 매 충돌마다 소폭 가속(옵션)
+        float s = rb.velocity.magnitude;
+        if (!hasHitOnce)
+        {
+            hasHitOnce = true;
+            if (speedAfterFirstHit > 0f) s = Mathf.Max(s, speedAfterFirstHit);
+        }
+        else if (hitSpeedGain > 0f)
+        {
+            s += hitSpeedGain;
+        }
+
+        s = Mathf.Clamp(s, minSpeed, maxSpeed);
+        rb.velocity = dir * s;
     }
 
     // ===== Helpers =====
@@ -70,6 +104,11 @@ public class Ball : MonoBehaviour
         Vector2 d2 = new Vector2(1, -1).normalized;
         return Mathf.Abs(Vector2.Dot(d, d1)) > dot
             || Mathf.Abs(Vector2.Dot(d, d2)) > dot;
+    }
+
+    public void ResetLaunchPhase()
+    {
+        hasHitOnce = false;  // 출발 단계로 되돌림 → launchMinSpeed 규칙 적용
     }
 
     static Vector2 RotateDeg(Vector2 v, float deg)
