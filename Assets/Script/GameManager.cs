@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 
@@ -35,18 +36,24 @@ public class GameManager : MonoBehaviour
     [Tooltip("무적 점멸 간격(초)")]
     public float invincibleBlinkInterval = 0.15f;
 
-    [Header("멀티볼 연동(옵션)")]
-    public BallManager ballManager; // 있으면 새 방/재시작 시 BallManager 통해 정리만 사용
+    [Header("멀티볼/매니저(선택)")]
+    public BallManager ballManager; // 있으면 멀티볼/카운트/스폰 통합 관리
 
-    private GameObject currentBall;
+    private GameObject currentBall;        // 싱글 실행용 레거시 참조(유지)
     private Coroutine blinkRoutine;
 
     // 스테이지 클리어~다음 방 들어갈 때까지 사망 무시
     public bool isTransitioning { get; private set; } = false;
 
-    // ===== [PATCH] 다음 방 속도 이월(상승치 1/2)용 상태 =====
-    private float lastStageEndSpeed = 0f;     // 직전 방 종료 시 공 속도(절대값)
-    private bool applyCarryNextLaunch = false; // 다음 방 첫 스폰에 한해 적용
+    // ===== 컨티뉴 표시 상태(중복 방지) =====
+    private bool continueShown = false;
+    public bool IsContinueShown() => continueShown;
+
+    // ===== 다음 방 속도/개수 이월 =====
+    private float lastStageEndSpeed = 0f;     // 직전 방 종료 시 공 속도(최대값 샘플)
+    private bool applyCarryNextLaunch = false; // 다음 방 첫 스폰에 한정
+    private int carryBallCount = 1;           // 다음 방으로 유지할 공 개수
+    private int pendingSpawnCount = 1;        // 이번 카운트다운 후 스폰할 개수
 
     // ===== 공 관리 =====
     public void HideBall()
@@ -57,10 +64,10 @@ public class GameManager : MonoBehaviour
     /// <summary>잔여 공 싹 정리 (멀티볼 포함)</summary>
     public void KillBall()
     {
-        if (ballManager != null) ballManager.ClearAll();   // 멀티볼 내부 리스트 정리
+        if (ballManager != null) ballManager.ClearAll();
 
         var leftovers = GameObject.FindGameObjectsWithTag("Ball");
-        foreach (var b in leftovers) if (b != null) Destroy(b); // 씬에 남은 건 전부 제거
+        foreach (var b in leftovers) if (b != null) Destroy(b);
 
         currentBall = null;
     }
@@ -77,10 +84,45 @@ public class GameManager : MonoBehaviour
         return Vector3.zero;
     }
 
-    // ===== 카운트다운 후 '그때' 공 생성/가시화/발사 + 무적 =====
+    // ===== 공 1개 생성(공용) =====
+    public GameObject SpawnBallAt(Vector3 pos, Vector2 dir, float desiredSpeed)
+    {
+        if (!ballPrefab) { Debug.LogError("[GM] ballPrefab 미설정"); return null; }
+
+        var go = Instantiate(ballPrefab, pos, Quaternion.identity);
+        var ball = go.GetComponent<Ball>();
+        if (ball) ball.ResetLaunchPhase(); // 항상 출발 단계로
+
+        // 보이게 강제
+        ForceVisible(go);
+
+        // 각도 보정 + 속도 세팅
+        var rb = go.GetComponent<Rigidbody2D>();
+        if (rb)
+        {
+            if (dir.sqrMagnitude < 0.0001f)
+                dir = Vector2.up;
+
+            // 완전 수평 회피
+            dir = (dir + Vector2.up * 0.35f).normalized;
+
+            float maxS = ball ? ball.maxSpeed : 14f;
+            float spd = Mathf.Clamp(desiredSpeed, 0f, maxS);
+            rb.velocity = dir.normalized * spd;
+        }
+
+        // 멀티볼 매니저에 등록(있으면)
+        if (ballManager) ballManager.Register(go);
+
+        // 레거시 currentBall 갱신(싱글 기준)
+        currentBall = go;
+        return go;
+    }
+
+    // ===== 카운트다운 후 '그때' 공들 생성/가시화/발사 + 무적 =====
     public IEnumerator CountdownAndLaunch()
     {
-        // (중요) 카운트다운 동안은 공이 "아예 없어야" 함 — 떠돌이/스텔스 차단
+        // 카운트다운 동안은 공이 "아예 없어야" 함 — 떠돌이/스텔스 차단
         KillBall();
 
         // 카운트다운 (Realtime — 타임스케일 0 무시)
@@ -93,52 +135,41 @@ public class GameManager : MonoBehaviour
             countdownText.gameObject.SetActive(false);
         }
 
-        // 무적/유예 적용 — 트리거/경계 체크 모두 이 시간 동안 건너뜀
+        // 무적/유예 적용
         float grace = Mathf.Max(invincibleDuration, deathzoneGrace);
         if (grace > 0f) DeathZone.IgnoreFor(grace);
 
-        // 여기서 '새 공'을 만든다 → 카운트다운 중 들이박는 스텔스 공 원천 차단
+        // 스폰 방향 기본값
         Vector3 spawnPos = GetSpawnPosition();
-        if (!ballPrefab)
+        Vector2 baseDir = paddle ? (paddle.position - spawnPos).normalized : Vector2.up;
+
+        // 기본 출발 속도는 Ball 설정 존중
+        float baseStart = 8f;
+        var tempBall = ballPrefab ? ballPrefab.GetComponent<Ball>() : null;
+        if (tempBall) baseStart = Mathf.Clamp(tempBall.startSpeed, 0f, tempBall.maxSpeed);
+
+        // [이월] 다음 방 첫 스폰에 한해서 "상승치 1/2" 반영
+        float desired = baseStart;
+        if (applyCarryNextLaunch && tempBall)
         {
-            Debug.LogError("[GM] ballPrefab 미설정 → 공 생성 불가");
-            yield break;
+            float delta = Mathf.Max(0f, lastStageEndSpeed - baseStart);
+            desired = Mathf.Clamp(baseStart + delta * 0.5f, 0f, tempBall.maxSpeed);
+            applyCarryNextLaunch = false;
         }
 
-        currentBall = Instantiate(ballPrefab, spawnPos, Quaternion.identity);
+        // N개 스폰(개수 유지/컨티뉴=1)
+        int n = Mathf.Max(1, pendingSpawnCount);
+        float spread = 12f; // 여러 개일 때 각도 간격
+        float mid = (n - 1) * 0.5f;
 
-        // 출발 단계 리셋(느린 출발 규칙 적용)
-        var ballComp = currentBall.GetComponent<Ball>();
-        if (ballComp) ballComp.ResetLaunchPhase();
-
-        // 보이게 강제
-        ForceVisible(currentBall);
-
-        // 발사 속도 계산
-        var rb = currentBall.GetComponent<Rigidbody2D>();
-        if (rb)
+        for (int i = 0; i < n; i++)
         {
-            Vector2 dir = Vector2.up;
-            if (paddle) dir = (paddle.position - spawnPos).normalized;
-            dir = (dir + Vector2.up * 0.35f).normalized; // 완전 수평 회피
-
-            // 기본 출발 속도는 Ball 설정을 존중
-            float desired = 8f;
-            if (ballComp) desired = Mathf.Clamp(ballComp.startSpeed, 0f, ballComp.maxSpeed);
-
-            // ===== [PATCH] 다음 방 첫 스폰에 한해서 "상승치 1/2" 이월 =====
-            if (applyCarryNextLaunch && ballComp)
-            {
-                float baseStart = Mathf.Clamp(ballComp.startSpeed, 0f, ballComp.maxSpeed);
-                float delta = Mathf.Max(0f, lastStageEndSpeed - baseStart); // 상승치(음수면 0)
-                desired = Mathf.Clamp(baseStart + delta * 0.5f, 0f, ballComp.maxSpeed);
-                applyCarryNextLaunch = false; // 한 번만 적용
-            }
-
-            rb.velocity = dir * desired;
+            float off = (i - mid) * spread;
+            Vector2 dir = RotateDeg(baseDir, off);
+            SpawnBallAt(spawnPos, dir, desired);
         }
 
-        // 무적 점멸 + 무적 중 낙하 시 즉시 리스폰 가드
+        // 무적 점멸 + 무적 중 낙하 시 즉시 리스폰 가드(첫 공 기준만 켜도 충분)
         if (invincibleDuration > 0f) StartCoroutine(InvincibleFXAndGuard(invincibleDuration));
     }
 
@@ -156,11 +187,9 @@ public class GameManager : MonoBehaviour
     IEnumerator InvincibleFXAndGuard(float duration)
     {
         float end = Time.time + duration;
-        // 점멸용 렌더러 캐시
         SpriteRenderer[] ballR = currentBall ? currentBall.GetComponentsInChildren<SpriteRenderer>(true) : null;
         SpriteRenderer[] padR = paddle ? paddle.GetComponentsInChildren<SpriteRenderer>(true) : null;
 
-        // killY 기준선 확보 (DeathZone에서 가져오거나 폴백)
         float killY = (paddle ? paddle.position.y - 5f : -5f);
         var dz = FindObjectOfType<DeathZone>();
         if (dz) killY = dz.GetKillY();
@@ -176,23 +205,21 @@ public class GameManager : MonoBehaviour
             // 무적 중 아래로 떨어졌으면 즉시 스폰 위치로 복귀 + 출발 단계로 리셋
             if (currentBall && currentBall.transform.position.y < killY - 0.05f)
             {
-                Vector3 spawnPos = GetSpawnPosition();
-                currentBall.transform.position = spawnPos;
+                Vector3 sp = GetSpawnPosition();
+                currentBall.transform.position = sp;
 
                 var rb = currentBall.GetComponent<Rigidbody2D>();
                 var ball = currentBall.GetComponent<Ball>();
-
-                if (ball) ball.ResetLaunchPhase(); // ← 출발 단계로 되돌림
+                if (ball) ball.ResetLaunchPhase();
 
                 if (rb)
                 {
-                    Vector2 dir = Vector2.up;
-                    if (paddle) dir = (paddle.position - spawnPos).normalized;
+                    Vector2 dir = paddle ? (paddle.position - sp).normalized : Vector2.up;
                     dir = (dir + Vector2.up * 0.35f).normalized;
 
-                    float desired = 8f;
-                    if (ball) desired = Mathf.Clamp(ball.startSpeed, 0f, ball.maxSpeed); // ← 느린 출발 보장
-                    rb.velocity = dir * desired;
+                    float maxS = ball ? ball.maxSpeed : 14f;
+                    float spd = ball ? Mathf.Clamp(ball.startSpeed, 0f, maxS) : 8f;
+                    rb.velocity = dir * spd;
                 }
             }
 
@@ -204,32 +231,35 @@ public class GameManager : MonoBehaviour
         if (padR != null) foreach (var r in padR) if (r) { var c = r.color; c.a = 1f; r.color = c; }
     }
 
-    // ===== 사망 플로우 =====
-    public void OnBallDeath()
+    // ===== UI/플로우 =====
+    public void ShowContinue()
     {
-        if (isTransitioning) return; // 방 전환 중이면 무시
+        if (continueShown || isTransitioning) return;
 
+        continueShown = true;
         if (uiCanvas && !uiCanvas.enabled) uiCanvas.enabled = true;
 
-        HideStartPanel();                    // 컨티뉴 가려지는 문제 방지
+        HideStartPanel();
         if (continuePanel) continuePanel.SetActive(true);
         if (nextStageText) nextStageText.gameObject.SetActive(false);
         if (gameOverText) gameOverText.gameObject.SetActive(false);
         if (exitDoors) exitDoors.Show(false);
 
-        // [PATCH] 사망 → 다음 발사에는 이월 금지
-        applyCarryNextLaunch = false;
+        // 공은 즉시 제거, 패들 입력 잠금
+        KillBall();
+        paddle?.GetComponent<PaddleController>()?.SetInputEnabled(false);
     }
 
     public void OnContinueYes()
     {
         if (continuePanel) continuePanel.SetActive(false);
-        HideStartPanel();                    // 혹시 남아있으면 숨김
+        HideStartPanel();
 
-        // [PATCH] 컨티뉴 발사에는 이월 금지
-        applyCarryNextLaunch = false;
+        continueShown = false;
+        pendingSpawnCount = 1;               // 컨티뉴는 항상 1개로 시작
+        paddle?.GetComponent<PaddleController>()?.SetInputEnabled(true);
 
-        StartCoroutine(CountdownAndLaunch()); // 카운트다운 끝에 '새 공' 생성(+무적)
+        StartCoroutine(CountdownAndLaunch());
     }
 
     public void OnContinueNo()
@@ -237,8 +267,8 @@ public class GameManager : MonoBehaviour
         if (continuePanel) continuePanel.SetActive(false);
         if (gameOverText) gameOverText.gameObject.SetActive(true);
 
-        // [PATCH] 재시작 라인에서도 이월 금지
-        applyCarryNextLaunch = false;
+        continueShown = false;
+        paddle?.GetComponent<PaddleController>()?.SetInputEnabled(false);
 
         StartCoroutine(RestartAfterDelay());
     }
@@ -261,6 +291,9 @@ public class GameManager : MonoBehaviour
         if (ballManager != null) ballManager.ResetForNewRoom();
         currentBall = null;
 
+        pendingSpawnCount = 1;
+        paddle?.GetComponent<PaddleController>()?.SetInputEnabled(true);
+
         StartCoroutine(CountdownAndLaunch());
     }
 
@@ -269,19 +302,9 @@ public class GameManager : MonoBehaviour
     {
         isTransitioning = true;
 
-        // ===== [PATCH] 방 종료 시 속도 샘플링(이월 기준) =====
-        float sample = 0f;
-        GameObject sampleBall = currentBall;
-        if (!sampleBall) sampleBall = GameObject.FindGameObjectWithTag("Ball");
-        if (sampleBall)
-        {
-            var rb = sampleBall.GetComponent<Rigidbody2D>();
-            if (rb) sample = rb.velocity.magnitude;
-        }
-        lastStageEndSpeed = sample;          // 직전 방 최종 속도 저장
-        applyCarryNextLaunch = true;         // 다음 방 첫 스폰 때 한 번만 적용
-
-        KillBall(); // 중복 공 원천 차단
+        // 현재 공 개수/속도 샘플 저장(이월용)
+        carryBallCount = Mathf.Max(1, ballManager ? ballManager.ActiveCount() : GameObject.FindGameObjectsWithTag("Ball").Length);
+        lastStageEndSpeed = SampleMaxBallSpeed();
 
         if (nextStageText)
         {
@@ -293,6 +316,9 @@ public class GameManager : MonoBehaviour
         if (continuePanel) continuePanel.SetActive(false);
         if (gameOverText) gameOverText.gameObject.SetActive(false);
         if (exitDoors) exitDoors.Show(true);
+
+        // 공은 전환 중엔 제거
+        KillBall();
     }
 
     public void OnNextRoomEntered()
@@ -301,10 +327,12 @@ public class GameManager : MonoBehaviour
         if (nextStageText) nextStageText.gameObject.SetActive(false);
         if (exitDoors) exitDoors.Show(false);
 
-        // 다음 방 준비 — 중복 공 방지
-        KillBall();
         if (ballManager != null) ballManager.ResetForNewRoom();
         currentBall = null;
+
+        // 다음 방: 개수 유지 + 속도 상승치 1/2 적용
+        pendingSpawnCount = Mathf.Max(1, carryBallCount);
+        applyCarryNextLaunch = true;
 
         isTransitioning = false;
 
@@ -325,5 +353,25 @@ public class GameManager : MonoBehaviour
         if (startPanel && startPanel.activeSelf) { startPanel.SetActive(false); return; }
         var sp = GameObject.Find("StartPanel"); // 이름 폴백
         if (sp) sp.SetActive(false);
+    }
+
+    float SampleMaxBallSpeed()
+    {
+        float max = 0f;
+        var balls = GameObject.FindGameObjectsWithTag("Ball");
+        foreach (var b in balls)
+        {
+            var rb = b.GetComponent<Rigidbody2D>();
+            if (rb) max = Mathf.Max(max, rb.velocity.magnitude);
+        }
+        return max;
+    }
+
+    static Vector2 RotateDeg(Vector2 v, float deg)
+    {
+        float rad = deg * Mathf.Deg2Rad;
+        float cs = Mathf.Cos(rad);
+        float sn = Mathf.Sin(rad);
+        return new Vector2(v.x * cs - v.y * sn, v.x * sn + v.y * cs);
     }
 }

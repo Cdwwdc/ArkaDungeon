@@ -134,6 +134,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   minGravity: 1
+  resetKinematic: 1
+  driftToPaddle: 0
+  driftSpeedX: 2
+  onlyIfNoXVelocity: 1
+  minXVelThreshold: 0.1
+  forceFallIfNoGravity: 1
+  fallbackFallSpeed: 2
 --- !u!1 &3815419499632632802
 GameObject:
   m_ObjectHideFlags: 0
