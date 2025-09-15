@@ -44,6 +44,10 @@ public class GameManager : MonoBehaviour
     // 스테이지 클리어~다음 방 들어갈 때까지 사망 무시
     public bool isTransitioning { get; private set; } = false;
 
+    // ===== [PATCH] 다음 방 속도 이월(상승치 1/2)용 상태 =====
+    private float lastStageEndSpeed = 0f;     // 직전 방 종료 시 공 속도(절대값)
+    private bool applyCarryNextLaunch = false; // 다음 방 첫 스폰에 한해 적용
+
     // ===== 공 관리 =====
     public void HideBall()
     {
@@ -103,14 +107,14 @@ public class GameManager : MonoBehaviour
 
         currentBall = Instantiate(ballPrefab, spawnPos, Quaternion.identity);
 
-        // [PATCH] 출발 단계로 리셋 (느린 출발 보장)
+        // 출발 단계 리셋(느린 출발 규칙 적용)
         var ballComp = currentBall.GetComponent<Ball>();
         if (ballComp) ballComp.ResetLaunchPhase();
 
         // 보이게 강제
         ForceVisible(currentBall);
 
-        // 발사
+        // 발사 속도 계산
         var rb = currentBall.GetComponent<Rigidbody2D>();
         if (rb)
         {
@@ -118,10 +122,20 @@ public class GameManager : MonoBehaviour
             if (paddle) dir = (paddle.position - spawnPos).normalized;
             dir = (dir + Vector2.up * 0.35f).normalized; // 완전 수평 회피
 
-            // [PATCH] Ball 설정을 존중: 하한 0, 상한은 프리팹 maxSpeed
-            float speed = 8f;
-            if (ballComp) speed = Mathf.Clamp(ballComp.startSpeed, 0f, ballComp.maxSpeed);
-            rb.velocity = dir * speed;
+            // 기본 출발 속도는 Ball 설정을 존중
+            float desired = 8f;
+            if (ballComp) desired = Mathf.Clamp(ballComp.startSpeed, 0f, ballComp.maxSpeed);
+
+            // ===== [PATCH] 다음 방 첫 스폰에 한해서 "상승치 1/2" 이월 =====
+            if (applyCarryNextLaunch && ballComp)
+            {
+                float baseStart = Mathf.Clamp(ballComp.startSpeed, 0f, ballComp.maxSpeed);
+                float delta = Mathf.Max(0f, lastStageEndSpeed - baseStart); // 상승치(음수면 0)
+                desired = Mathf.Clamp(baseStart + delta * 0.5f, 0f, ballComp.maxSpeed);
+                applyCarryNextLaunch = false; // 한 번만 적용
+            }
+
+            rb.velocity = dir * desired;
         }
 
         // 무적 점멸 + 무적 중 낙하 시 즉시 리스폰 가드
@@ -159,7 +173,7 @@ public class GameManager : MonoBehaviour
             if (padR != null) foreach (var r in padR) if (r) { var c = r.color; c.a = a; r.color = c; }
             on = !on;
 
-            // [PATCH] 무적 중 아래로 떨어졌으면 즉시 스폰 위치로 복귀 + 출발 단계로 리셋
+            // 무적 중 아래로 떨어졌으면 즉시 스폰 위치로 복귀 + 출발 단계로 리셋
             if (currentBall && currentBall.transform.position.y < killY - 0.05f)
             {
                 Vector3 spawnPos = GetSpawnPosition();
@@ -176,9 +190,9 @@ public class GameManager : MonoBehaviour
                     if (paddle) dir = (paddle.position - spawnPos).normalized;
                     dir = (dir + Vector2.up * 0.35f).normalized;
 
-                    float speed = 8f;
-                    if (ball) speed = Mathf.Clamp(ball.startSpeed, 0f, ball.maxSpeed); // ← 느린 출발 보장
-                    rb.velocity = dir * speed;
+                    float desired = 8f;
+                    if (ball) desired = Mathf.Clamp(ball.startSpeed, 0f, ball.maxSpeed); // ← 느린 출발 보장
+                    rb.velocity = dir * desired;
                 }
             }
 
@@ -202,12 +216,19 @@ public class GameManager : MonoBehaviour
         if (nextStageText) nextStageText.gameObject.SetActive(false);
         if (gameOverText) gameOverText.gameObject.SetActive(false);
         if (exitDoors) exitDoors.Show(false);
+
+        // [PATCH] 사망 → 다음 발사에는 이월 금지
+        applyCarryNextLaunch = false;
     }
 
     public void OnContinueYes()
     {
         if (continuePanel) continuePanel.SetActive(false);
         HideStartPanel();                    // 혹시 남아있으면 숨김
+
+        // [PATCH] 컨티뉴 발사에는 이월 금지
+        applyCarryNextLaunch = false;
+
         StartCoroutine(CountdownAndLaunch()); // 카운트다운 끝에 '새 공' 생성(+무적)
     }
 
@@ -215,6 +236,10 @@ public class GameManager : MonoBehaviour
     {
         if (continuePanel) continuePanel.SetActive(false);
         if (gameOverText) gameOverText.gameObject.SetActive(true);
+
+        // [PATCH] 재시작 라인에서도 이월 금지
+        applyCarryNextLaunch = false;
+
         StartCoroutine(RestartAfterDelay());
     }
 
@@ -243,6 +268,18 @@ public class GameManager : MonoBehaviour
     public void OnStageClear()
     {
         isTransitioning = true;
+
+        // ===== [PATCH] 방 종료 시 속도 샘플링(이월 기준) =====
+        float sample = 0f;
+        GameObject sampleBall = currentBall;
+        if (!sampleBall) sampleBall = GameObject.FindGameObjectWithTag("Ball");
+        if (sampleBall)
+        {
+            var rb = sampleBall.GetComponent<Rigidbody2D>();
+            if (rb) sample = rb.velocity.magnitude;
+        }
+        lastStageEndSpeed = sample;          // 직전 방 최종 속도 저장
+        applyCarryNextLaunch = true;         // 다음 방 첫 스폰 때 한 번만 적용
 
         KillBall(); // 중복 공 원천 차단
 

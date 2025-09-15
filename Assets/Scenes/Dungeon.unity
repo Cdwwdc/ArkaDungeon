@@ -3661,9 +3661,9 @@ MonoBehaviour:
   nextStageText: {fileID: 1441690793}
   gameOverText: {fileID: 1102465210}
   startPanel: {fileID: 1124949225}
-  countdownInterval: 1
+  countdownInterval: 0.55
   deathzoneGrace: 1
-  spawnAbovePaddleOffset: 0.35
+  spawnAbovePaddleOffset: 0.5
   restartDelay: 3
   invincibleDuration: 3
   invincibleBlinkInterval: 0.15
