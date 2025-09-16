@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 75e356d59f1d7514a95c787d5b185038, type: 3}
+  m_Name: Pastel8
+  m_EditorClassIdentifier: 
+  colors:
+  - {r: 0.9245283, g: 0.7388732, b: 0.23113208, a: 0}
+  - {r: 0.90588236, g: 0.5651714, b: 0.13333334, a: 0}
+  - {r: 0.9528302, g: 0.15730685, b: 0.32499155, a: 0}
+  - {r: 0.7735849, g: 0.0693307, b: 0.68543524, a: 0}
+  - {r: 0.10234957, g: 0.112811305, b: 0.8679245, a: 0}
+  - {r: 0.08009967, g: 0.6792453, b: 0.662825, a: 0}
+  - {r: 0.17007834, g: 0.9245283, b: 0.3121867, a: 0}

@@ -404,13 +404,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: edeef22cfca922642aa4725b82170677, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  gameManager: {fileID: 1849472988}
-  ballPrefab: {fileID: 32550840682818866, guid: 67f610423139f304282d4fff6a977634, type: 3}
-  ballSpawn: {fileID: 1753918666}
-  paddle: {fileID: 2018502731}
-  maxBalls: 4
-  ballTag: Ball
-  ballLayerName: Ball
+  gm: {fileID: 0}
+  splitAngle: 12
 --- !u!4 &263460890
 Transform:
   m_ObjectHideFlags: 0
@@ -4633,6 +4628,67 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2119047775}
   m_CullTransparentMesh: 1
+--- !u!1001 &5432639447917135812
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7673590824290873873, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_Name
+      value: Brick
+      objectReference: {fileID: 0}
+    - target: {fileID: 7673590824290873873, guid: 929b418279ead644eaf73fe721644acf, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 929b418279ead644eaf73fe721644acf, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -4642,3 +4698,4 @@ SceneRoots:
   - {fileID: 177006641}
   - {fileID: 1008957591}
   - {fileID: 687889386}
+  - {fileID: 5432639447917135812}
