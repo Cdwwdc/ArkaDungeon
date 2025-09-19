@@ -1083,6 +1083,52 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
+--- !u!1 &661822671
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 661822673}
+  - component: {fileID: 661822672}
+  m_Layer: 0
+  m_Name: LevelZone
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &661822672
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 661822671}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b5af9bbc3d2f2b4a99385198ef0e30a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  size: {x: 4.12, y: 0.8}
+  levelRange: {x: 1, y: 6}
+--- !u!4 &661822673
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 661822671}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.59, y: 1.28, z: -0.051072516}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &687889385
 GameObject:
   m_ObjectHideFlags: 0
@@ -2144,6 +2190,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1148952005}
+  - component: {fileID: 1148952006}
   m_Layer: 0
   m_Name: BricksContainer
   m_TagString: Untagged
@@ -2166,6 +2213,51 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1008957591}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1148952006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1148952004}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4601273a92bdcc14bacf38a09e30d209, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  brickRoot: {fileID: 1148952005}
+  roomHpMin: 1
+  roomHpMax: 1
+  maxHpClamp: 10
+  onlyAssignIfHpIsOne: 1
+  applyOnStart: 1
+  reapplyWhenChildrenChange: 0
+  useDirectLevelAsHP: 1
+  levelToHpCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 1
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 10
+      value: 10
+      inSlope: 1
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  zonesOnly: 0
 --- !u!1 &1163337455
 GameObject:
   m_ObjectHideFlags: 0
@@ -2663,6 +2755,52 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1272756118}
   m_CullTransparentMesh: 1
+--- !u!1 &1404556677
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1404556679}
+  - component: {fileID: 1404556678}
+  m_Layer: 0
+  m_Name: LevelZone (1)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1404556678
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1404556677}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4b5af9bbc3d2f2b4a99385198ef0e30a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  size: {x: 4.12, y: 0.8}
+  levelRange: {x: 1, y: 6}
+--- !u!4 &1404556679
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1404556677}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.59, y: 2.53, z: -0.051072516}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1441690791
 GameObject:
   m_ObjectHideFlags: 0
@@ -3663,6 +3801,8 @@ MonoBehaviour:
   invincibleDuration: 3
   invincibleBlinkInterval: 0.15
   ballManager: {fileID: 263460889}
+  carryBallBetweenStages: 1
+  carrySplitAngle: 12
 --- !u!4 &1849472989
 Transform:
   m_ObjectHideFlags: 0
@@ -4628,67 +4768,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2119047775}
   m_CullTransparentMesh: 1
---- !u!1001 &5432639447917135812
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 282018106229907731, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7673590824290873873, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_Name
-      value: Brick
-      objectReference: {fileID: 0}
-    - target: {fileID: 7673590824290873873, guid: 929b418279ead644eaf73fe721644acf, type: 3}
-      propertyPath: m_IsActive
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 929b418279ead644eaf73fe721644acf, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -4698,4 +4777,5 @@ SceneRoots:
   - {fileID: 177006641}
   - {fileID: 1008957591}
   - {fileID: 687889386}
-  - {fileID: 5432639447917135812}
+  - {fileID: 661822673}
+  - {fileID: 1404556679}

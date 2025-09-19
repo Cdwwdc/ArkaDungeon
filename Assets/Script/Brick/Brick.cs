@@ -38,6 +38,11 @@ public class Brick : MonoBehaviour
     {
         if (isBreaking) return;
         hitPoints -= Mathf.Max(1, dmg);
+
+        // ★추가: HP 변동 즉시 색 재적용(BrickSkin.mapByHitPoints=ON일 때 단계적으로 다운그레이드됨)
+        var skin = GetComponent<BrickSkin>();
+        if (skin) skin.ApplyColor();
+
         if (hitPoints <= 0) Break();
     }
 

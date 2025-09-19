@@ -55,6 +55,10 @@ public class GameManager : MonoBehaviour
     private int carryBallCount = 1;           // 다음 방으로 유지할 공 개수
     private int pendingSpawnCount = 1;        // 이번 카운트다운 후 스폰할 개수
 
+    [Header("Ball Carry-over")]                // ★추가
+    public bool carryBallBetweenStages = true; // ★추가: 이월 사용 여부
+    public float carrySplitAngle = 12f;        // ★추가: 여러 개 스폰 시 각도 간격(도)
+
     // ===== 공 관리 =====
     public void HideBall()
     {
@@ -159,7 +163,7 @@ public class GameManager : MonoBehaviour
 
         // N개 스폰(개수 유지/컨티뉴=1)
         int n = Mathf.Max(1, pendingSpawnCount);
-        float spread = 12f; // 여러 개일 때 각도 간격
+        float spread = Mathf.Max(0f, carrySplitAngle);
         float mid = (n - 1) * 0.5f;
 
         for (int i = 0; i < n; i++)
@@ -182,6 +186,14 @@ public class GameManager : MonoBehaviour
         var rs = go.GetComponentsInChildren<Renderer>(true);
         foreach (var r in rs) if (r && !r.enabled) r.enabled = true;
     }
+
+    // ★추가: 패들 가시/비가시 전환(렌더러만) + 입력 잠금 연계
+    void SetPaddleVisible(bool visible) // ★추가
+    {
+        if (!paddle) return;
+        var rends = paddle.GetComponentsInChildren<Renderer>(true);
+        foreach (var r in rends) if (r) r.enabled = visible;
+    } // ★추가
 
     // 무적: 공/패들 점멸 + killY 아래로 떨어지면 즉시 리스폰(느린 출발로 복귀)
     IEnumerator InvincibleFXAndGuard(float duration)
@@ -288,11 +300,17 @@ public class GameManager : MonoBehaviour
         if (rc) rc.BuildRoomSimple();
         FindObjectOfType<BackgroundManager>()?.NextRoom();
 
+        // 새 방 브릭 HP/색 재할당(레벨존 반영)
+        FindObjectOfType<BrickHPAssigner>()?.AssignAll();
+
         if (ballManager != null) ballManager.ResetForNewRoom();
         currentBall = null;
 
         pendingSpawnCount = 1;
-        paddle?.GetComponent<PaddleController>()?.SetInputEnabled(true);
+
+        // ★추가: 다음 라운드 시작 전 패들 복구/입력 활성
+        SetPaddleVisible(true);                                                // ★추가
+        paddle?.GetComponent<PaddleController>()?.SetInputEnabled(true);       // ★추가
 
         StartCoroutine(CountdownAndLaunch());
     }
@@ -303,7 +321,7 @@ public class GameManager : MonoBehaviour
         isTransitioning = true;
 
         // 현재 공 개수/속도 샘플 저장(이월용)
-        carryBallCount = Mathf.Max(1, ballManager ? ballManager.ActiveCount() : GameObject.FindGameObjectsWithTag("Ball").Length);
+        carryBallCount = carryBallBetweenStages ? Mathf.Max(1, CountLiveBallsStrict()) : 1;
         lastStageEndSpeed = SampleMaxBallSpeed();
 
         if (nextStageText)
@@ -317,8 +335,15 @@ public class GameManager : MonoBehaviour
         if (gameOverText) gameOverText.gameObject.SetActive(false);
         if (exitDoors) exitDoors.Show(true);
 
+        // ★추가: 패들 즉시 숨김 + 입력 잠금(클리어 순간부터 멈춤/안 보임)
+        SetPaddleVisible(false);                                               // ★추가
+        paddle?.GetComponent<PaddleController>()?.SetInputEnabled(false);      // ★추가
+
         // 공은 전환 중엔 제거
         KillBall();
+
+        // ★추가: 스테이지 클리어 시 아이템 정리
+        ResolveItemsOnStageClear();                                            // ★추가
     }
 
     public void OnNextRoomEntered()
@@ -327,12 +352,19 @@ public class GameManager : MonoBehaviour
         if (nextStageText) nextStageText.gameObject.SetActive(false);
         if (exitDoors) exitDoors.Show(false);
 
+        // 방 입장 직후에도 한 번 더 레벨존 반영(안전)
+        FindObjectOfType<BrickHPAssigner>()?.AssignAll();
+
         if (ballManager != null) ballManager.ResetForNewRoom();
         currentBall = null;
 
         // 다음 방: 개수 유지 + 속도 상승치 1/2 적용
-        pendingSpawnCount = Mathf.Max(1, carryBallCount);
-        applyCarryNextLaunch = true;
+        pendingSpawnCount = carryBallBetweenStages ? Mathf.Max(1, carryBallCount) : 1;
+        applyCarryNextLaunch = carryBallBetweenStages;
+
+        // ★추가: 다음 방에서 패들 다시 보이게 + 입력 활성
+        SetPaddleVisible(true);                                                // ★추가
+        paddle?.GetComponent<PaddleController>()?.SetInputEnabled(true);       // ★추가
 
         isTransitioning = false;
 
@@ -365,6 +397,48 @@ public class GameManager : MonoBehaviour
             if (rb) max = Mathf.Max(max, rb.velocity.magnitude);
         }
         return max;
+    }
+
+    // 활성 공 '정확 계수' (중복/비활성 제외)
+    int CountLiveBallsStrict()
+    {
+        int count = 0;
+        var balls = FindObjectsOfType<Ball>(false); // 비활성 컴포넌트 제외
+        foreach (var ball in balls)
+        {
+            if (!ball) continue;
+            var go = ball.gameObject;
+            if (!go.activeInHierarchy) continue;
+            count++;
+        }
+        return count > 0 ? count : 1;
+    }
+
+    // ★추가: 스테이지 클리어 시 아이템 정책 적용
+    void ResolveItemsOnStageClear() // ★추가
+    {
+        var items = FindObjectsOfType<StageItemPolicy>(false);
+        foreach (var it in items)
+        {
+            if (!it || !it.gameObject.activeInHierarchy) continue;
+
+            switch (it.onStageClear)
+            {
+                case StageItemPolicy.StageClearBehavior.AutoCollect:
+                    // 아이템 쪽에 CollectImmediately()가 있으면 호출(없어도 에러 안 남)
+                    it.gameObject.SendMessage("CollectImmediately", SendMessageOptions.DontRequireReceiver);
+                    Destroy(it.gameObject);
+                    break;
+
+                case StageItemPolicy.StageClearBehavior.Disappear:
+                    Destroy(it.gameObject);
+                    break;
+
+                case StageItemPolicy.StageClearBehavior.None:
+                default:
+                    break;
+            }
+        }
     }
 
     static Vector2 RotateDeg(Vector2 v, float deg)

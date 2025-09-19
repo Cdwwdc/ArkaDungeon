@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 897949921702585875}
   - component: {fileID: 6961489383874469364}
   - component: {fileID: -6161299174961849433}
+  - component: {fileID: 966473784769809091}
   m_Layer: 0
   m_Name: PowerUpItem
   m_TagString: Untagged
@@ -141,6 +142,19 @@ MonoBehaviour:
   minXVelThreshold: 0.1
   forceFallIfNoGravity: 1
   fallbackFallSpeed: 2
+--- !u!114 &966473784769809091
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2450524962487189150}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 545029b3c3981aa4f9c581cbfccd4891, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  onStageClear: 0
 --- !u!1 &3815419499632632802
 GameObject:
   m_ObjectHideFlags: 0
