@@ -1,25 +1,30 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
 public class Brick : MonoBehaviour
 {
-    [Header("ºê¸¯ ¼³Á¤")]
-    public int hitPoints = 1;            // Ã¼·Â (1=ÇÑ ¹ø¿¡ ÆÄ±«)
-    public int score = 10;               // Á¡¼ö(¼±ÅÃ)
-    public bool destroyOnAnyHit = false; // ¸ğµç Ãæµ¹¿¡ ¹Ù·Î ÆÄ±«
+    [Header("ë¸Œë¦­ ì„¤ì •")]
+    public int hitPoints = 1;            // ì²´ë ¥ (1=í•œ ë²ˆì— íŒŒê´´)
+    public int score = 10;               // ì ìˆ˜(ì„ íƒ)
+    public bool destroyOnAnyHit = false; // ëª¨ë“  ì¶©ëŒì— ë°”ë¡œ íŒŒê´´
 
-    [Header("ÀÌÆåÆ®(¿É¼Ç)")]
-    public ParticleSystem breakFx;       // ÆÄ±« ÀÌÆåÆ®(¾ø¾îµµ µÊ)
-    public AudioSource breakSfx;         // »ç¿îµå(¾ø¾îµµ µÊ)
+    [Header("ì´í™íŠ¸(ì˜µì…˜)")]
+    public ParticleSystem breakFx;       // íŒŒê´´ ì´í™íŠ¸(ì—†ì–´ë„ ë¨)
+    public AudioSource breakSfx;         // ì‚¬ìš´ë“œ(ì—†ì–´ë„ ë¨)
 
-    [Header("¾ÆÀÌÅÛ µå·Ó")]
-    public GameObject powerUpPrefab;     // PowerUpItem ÇÁ¸®ÆÕ
+    [Header("ì•„ì´í…œ ë“œë¡­")]
+    public GameObject powerUpPrefab;     // PowerUpItem í”„ë¦¬íŒ¹
     [Range(0f, 1f)] public float dropChance = 0.2f;
 
-    // ³»ºÎ
+    // ë‚´ë¶€
     RoomController room;
-    bool isBreaking = false;             // Áßº¹ ÆÄ±« ¹æÁö
+    bool isBreaking = false;             // ì¤‘ë³µ íŒŒê´´ ë°©ì§€
 
-    // RoomController°¡ »ı¼º ½Ã È£Ãâ
+    // ë§ˆì§€ë§‰ íˆíŠ¸ ì—°ì¶œìš© ìºì‹œ (ìœ ì§€)
+    Vector3 _lastHitPos;
+    GameObject _lastBallGO;
+    bool _hasLastHitInfo = false;
+
+    // RoomControllerê°€ ìƒì„± ì‹œ í˜¸ì¶œ
     public void Init(RoomController rc)
     {
         room = rc;
@@ -30,6 +35,11 @@ public class Brick : MonoBehaviour
     {
         if (!col.collider.CompareTag("Ball")) return;
 
+        // íˆíŠ¸ ì§€ì /ê³µ ìºì‹œ(ìŠ¬ë¡œëª¨/ì¤Œ ì—°ì¶œì— ì‚¬ìš©)
+        _lastHitPos = (col.contactCount > 0) ? (Vector3)col.GetContact(0).point : transform.position;
+        _lastBallGO = col.rigidbody ? col.rigidbody.gameObject : null;
+        _hasLastHitInfo = true;
+
         if (destroyOnAnyHit) { Break(); return; }
         Hit(1);
     }
@@ -39,7 +49,7 @@ public class Brick : MonoBehaviour
         if (isBreaking) return;
         hitPoints -= Mathf.Max(1, dmg);
 
-        // ¡ÚÃß°¡: HP º¯µ¿ Áï½Ã »ö ÀçÀû¿ë(BrickSkin.mapByHitPoints=ONÀÏ ¶§ ´Ü°èÀûÀ¸·Î ´Ù¿î±×·¹ÀÌµåµÊ)
+        // HP ë³€í™” ì‹œ ìƒ‰ ì¬ì ìš©(ìˆì„ ë•Œë§Œ)
         var skin = GetComponent<BrickSkin>();
         if (skin) skin.ApplyColor();
 
@@ -51,7 +61,16 @@ public class Brick : MonoBehaviour
         if (isBreaking) return;
         isBreaking = true;
 
-        // ÀÌÆåÆ®/»ç¿îµå
+        // â¬‡â¬‡â¬‡ ë³€ê²½: ClearCinematic â†’ CinematicFX (ë‚˜ë¨¸ì§€ ë™ì¼)
+        if (IsLastBrickInScene())
+        {
+            var sr = GetComponentInChildren<SpriteRenderer>(true);
+            var focus = _hasLastHitInfo ? _lastHitPos : transform.position;
+            CinematicFX.I?.PlayClear(focus, _lastBallGO, sr); // â† ì—¬ê¸°ë§Œ êµì²´
+        }
+        // â¬†â¬†â¬† ë³€ê²½ ë
+
+        // ì´í™íŠ¸/ì‚¬ìš´ë“œ
         if (breakFx)
         {
             var fx = Instantiate(breakFx, transform.position, Quaternion.identity);
@@ -60,15 +79,22 @@ public class Brick : MonoBehaviour
         }
         if (breakSfx) breakSfx.Play();
 
-        // µå·Ó
+        // ë“œë¡­
         if (powerUpPrefab && Random.value < dropChance)
         {
             Instantiate(powerUpPrefab, transform.position, Quaternion.identity);
         }
 
-        // ÆÄ±« ¹× ¾Ë¸²
+        // íŒŒê´´ ë° ì•Œë¦¼
         Destroy(gameObject);
         if (room != null) room.NotifyBrickDestroyed();
-        else Debug.LogWarning("[Brick] room ÂüÁ¶°¡ ¾øÀ½(Init ´©¶ô?)");
+        else Debug.LogWarning("[Brick] room ì°¸ì¡°ê°€ ì—†ìŒ(Init ëˆ„ë½?)");
+    }
+
+    // RoomController ìˆ˜ì • ì—†ì´ 'ë§ˆì§€ë§‰ ë²½ëŒ' ê°„ë‹¨ íŒì •
+    bool IsLastBrickInScene()
+    {
+        var bricks = FindObjectsOfType<Brick>(false); // ë¹„í™œì„± ì œì™¸
+        return bricks != null && bricks.Length <= 1;
     }
 }

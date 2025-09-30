@@ -47,11 +47,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 589ee7845118d9b4197b0a1a127a4702, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startSpeed: 3
-  minSpeed: 3
-  maxSpeed: 8
-  launchMinSpeed: 3
-  speedAfterFirstHit: 3
+  startSpeed: 4
+  minSpeed: 4
+  maxSpeed: 9
+  launchMinSpeed: 4
+  speedAfterFirstHit: 4.5
   hitSpeedGain: 0.1
   axisLockDot: 0.995
   diagLockDot: 0.995
@@ -91,7 +91,7 @@ CircleCollider2D:
   m_UsedByComposite: 0
   m_Offset: {x: 0, y: 0}
   serializedVersion: 2
-  m_Radius: 0.04
+  m_Radius: 0.125
 --- !u!50 &8305256403966847888
 Rigidbody2D:
   serializedVersion: 4
@@ -146,7 +146,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.17799, y: 0.17799, z: 0.17799}
+  m_LocalScale: {x: 0.25, y: 0.25, z: 0.25}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 7214625108821106594}

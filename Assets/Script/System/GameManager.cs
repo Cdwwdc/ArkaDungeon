@@ -248,6 +248,9 @@ public class GameManager : MonoBehaviour
     {
         if (continueShown || isTransitioning) return;
 
+        // ★SlowMo: 대드존 히트(죽음) 연출 — 슬로모+쉐이크
+        FindObjectOfType<SlowMoFX>()?.PlayDeathFX(); // ★SlowMo
+
         continueShown = true;
         if (uiCanvas && !uiCanvas.enabled) uiCanvas.enabled = true;
 
@@ -319,6 +322,9 @@ public class GameManager : MonoBehaviour
     public void OnStageClear()
     {
         isTransitioning = true;
+
+        // ★SlowMo: 클리어 순간 연출 — 슬로모+쉐이크
+        FindObjectOfType<SlowMoFX>()?.PlayClearFX(); // ★SlowMo
 
         // 현재 공 개수/속도 샘플 저장(이월용)
         carryBallCount = carryBallBetweenStages ? Mathf.Max(1, CountLiveBallsStrict()) : 1;

@@ -31,6 +31,9 @@ public class BallManager : MonoBehaviour
         int count = ActiveCount();
         if (lastCount > 0 && count == 0)
         {
+            // ★추가: 마지막 공이 방금 사라진 프레임 → 죽음 연출 1회
+            CinematicFX.TryPlayDeath();
+
             gm.ShowContinue(); // 마지막 공이 떨어진 시점에만 컨티뉴
         }
         lastCount = count;
@@ -62,6 +65,7 @@ public class BallManager : MonoBehaviour
         set.Clear();
         lastCount = 0;
     }
+
     public void PowerUp_MultiBall()
     {
         // 기준 위치를 못 받으면 패들 위치 기준
@@ -85,6 +89,7 @@ public class BallManager : MonoBehaviour
         if (go) AddOneFromNearestTo(go.transform.position);
         else PowerUp_MultiBall();
     }
+
     // ===== 아이템: 현재 '가장 가까운' 공에서 1개 추가 =====
     public void AddOneFromNearestTo(Vector3 refPos)
     {

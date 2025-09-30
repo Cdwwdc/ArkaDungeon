@@ -27,7 +27,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.5, y: 0.25, z: 1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 282018106229907731}
@@ -111,7 +111,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 0.064645, y: 0.064645, z: 0.64645}
+  m_LocalScale: {x: 0.158644, y: 0.158644, z: 0.158644}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 282018106229907731}
@@ -179,7 +179,6 @@ GameObject:
   - component: {fileID: 282018106229907731}
   - component: {fileID: 2952825211215014038}
   - component: {fileID: 5333207002057878697}
-  - component: {fileID: 8869869394291610005}
   m_Layer: 0
   m_Name: WallBrick_001
   m_TagString: Untagged
@@ -247,7 +246,7 @@ BoxCollider2D:
     adaptiveTiling: 0
   m_AutoTiling: 0
   serializedVersion: 2
-  m_Size: {x: 0.5, y: 0.25}
+  m_Size: {x: 1, y: 0.5}
   m_EdgeRadius: 0
 --- !u!50 &5333207002057878697
 Rigidbody2D:
@@ -276,22 +275,3 @@ Rigidbody2D:
   m_SleepingMode: 1
   m_CollisionDetection: 0
   m_Constraints: 0
---- !u!114 &8869869394291610005
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7673590824290873873}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ec8417f406163d742a62ad860e91e089, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  hitPoints: 1
-  score: 10
-  destroyOnAnyHit: 0
-  breakFx: {fileID: 0}
-  breakSfx: {fileID: 0}
-  powerUpPrefab: {fileID: 2450524962487189150, guid: 9265e9c584c20a947870231eb87d3b66, type: 3}
-  dropChance: 0.2
