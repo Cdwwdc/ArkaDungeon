@@ -1,16 +1,18 @@
 ﻿using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine.Tilemaps; // TilemapRenderer 사용
+using UnityEngine.Tilemaps;
+using TMPro;
 
 public class RoomController : MonoBehaviour
 {
     [Header("루트/브릭 프리팹")]
-    public Transform brickRoot;           // BricksContainer (없으면 this)
-    public GameObject brickPrefab;        // Brick.cs 포함 필수
+    public Transform brickRoot;
+    public GameObject brickPrefab;
 
     [Header("출구(선택)")]
-    public ExitDoors exitDoors;           // 없어도 동작
+    public ExitDoors exitDoors;
+    public ExitGate exitGatePrefab;
 
     [Header("격자 기본(폴백용)")]
     public int cols = 12;
@@ -18,10 +20,7 @@ public class RoomController : MonoBehaviour
     public Vector2 cellSize = new Vector2(0.9f, 0.6f);
 
     public enum GridAnchor { TopLeft, Center }
-    [Tooltip("Center: brickSpawnRoot.position을 격자 중앙으로 사용")]
     public GridAnchor gridAnchor = GridAnchor.Center;
-
-    [Tooltip("TopLeft 모드에서 사용되는 좌상단 월드 좌표")]
     public Vector2 origin = new Vector2(-4.0f, 2.5f);
 
     [Header("채움 컨트롤(폴백용)")]
@@ -53,7 +52,7 @@ public class RoomController : MonoBehaviour
     public Vector2 overlapBoxScale = new Vector2(0.8f, 0.8f);
 
     [Header("추가 요소 프리팹들(폴백/양념)")]
-    public GameObject[] obstaclePrefabs; // (Brick.cs 없어야 함)
+    public GameObject[] obstaclePrefabs;
     public GameObject[] chestPrefabs;
     public GameObject[] monsterPrefabs;
 
@@ -66,90 +65,168 @@ public class RoomController : MonoBehaviour
     public bool autoBuildOnPlay = true;
     public bool autoScanExistingOnPlay = true;
 
-    [Header("클리어 감시자(신호 유실 대비)")]
+    [Header("클리어 감시자")]
     public bool enableClearWatchdog = true;
     public float watchInterval = 0.25f;
 
-    // ---------------- NEW: 루트 분리/스폰 기준 분리 ----------------
     [Header("NEW: 셸/브릭 루트 분리")]
-    [Tooltip("셸(벽 레이아웃) 프리팹이 붙을 루트. 기본=RoomController 오브젝트")]
     public Transform shellRoot;
-    [Tooltip("브릭 격자/Zone 스폰의 '중심' 기준점. 기본=brickRoot")]
     public Transform brickSpawnRoot;
-    [Tooltip("브릭 격자 전체에 추가할 오프셋(미세조정)")]
     public Vector2 brickGridOffset = Vector2.zero;
 
     [Header("NEW: 셸/Zone 기반 스폰")]
-    [Tooltip("테마별 벽(셸) 프리팹 후보들")]
     public GameObject[] wallLayoutPrefabs;
-    [Tooltip("셸에 ZoneVolume이 있으면 그 설정을 우선 사용")]
     public bool spawnByZonesFirst = true;
 
     [Header("셸 정렬(선택)")]
-    [Tooltip("셸 프리팹 내용물의 중심을 shellRoot.position에 자동 정렬")]
     public bool autoCenterShell = true;
     public Vector3 shellSpawnOffset = Vector3.zero;
 
-    // === 센터링 기준/동작 (이전 그대로 유지) ===
     public enum CenterBoundsMode { AllRenderers, TilemapOnly, LayerMask }
-
     [Header("NEW: 셸 센터링 기준/동작")]
-    [Tooltip("TilemapOnly 권장: 거대한 BG Sprite 등으로 인한 바운즈 튐 방지")]
     public CenterBoundsMode centerBoundsMode = CenterBoundsMode.TilemapOnly;
-
-    [Tooltip("LayerMask 모드에서만 사용: 포함할 레이어")]
     public LayerMask centerBoundsMask = ~0;
-
-    [Tooltip("true면 셸 부모는 고정, 자식만 이동하여 중앙 정렬")]
     public bool centerMoveChildren = true;
 
-    // === ★ 이번 핀셋 추가: 내부 오프셋 보존 옵션 ===
     [Header("NEW: 프리팹 내부 오프셋 유지")]
-    [Tooltip("켜면 Grid/Tilemap 등의 자식 로컬 오프셋을 그대로 둡니다.")]
     public bool keepPrefabInternalOffsets = true;
 
-    [Header("난이도(외부 연동 전까지 임시)")]
+    [Header("NEW: 벽 경계 자동 스캔")]
+    public bool autoScanWallsForPaddle = true;
+    public Transform wallsRootForScan;
+    [Range(0, 6)] public int wallScanDelayFrames = 2;
+
+    [Header("난이도(임시)")]
     public int debugLevel = 0;
+
+    [Header("Exit Gate Spawn (엑시트 방 내부 규칙)")]
+    public bool exitGateEnable = true;
+    [Min(0)] public int exitGateEdgeMarginCells = 0;
+    public BoxCollider2D[] exitGateAreas;
+
+    [Header("Exit Gate Scheduling (런 단위)")]
+    public DungeonRunState.ExitScheduleMode exitScheduleMode = DungeonRunState.ExitScheduleMode.ForceNthUnique;
+    [Min(1)] public int forceExitAtRoomNth = 2;
+    [Min(1)] public int randomExitMinNth = 3;
+    [Min(1)] public int randomExitMaxNth = 6;
+
+    [Header("Room Identity (좌표 키)")]
+    public int roomKeyX = 0;
+    public int roomKeyY = 0;
+
+    [Header("씬 진입 시 런 상태 리셋")]
+    public bool resetRunOnSceneStart = true;
 
     // 내부 상태
     int aliveBricks = 0;
     Coroutine clearWatchCR;
 
+    bool _lastBuildWasCleared = false;
+
+    List<BrickExitHook> _spawnedBrickHooks = new List<BrickExitHook>();
+    ExitGate _exitGateInstance;
+
+    bool _isExitRoomThisBuild = false;
+    bool _hasPlannedExitGate = false;
+    Vector3 _plannedExitGatePos = Vector3.zero;
+
+    static int _sExitHookSuppressDepth = 0;
+    public static bool ExitHookSuppressed => _sExitHookSuppressDepth > 0;
+    static void PushExitHookSuppress() { _sExitHookSuppressDepth++; }
+    static void PopExitHookSuppress() { _sExitHookSuppressDepth = Mathf.Max(0, _sExitHookSuppressDepth - 1); }
+
+    static int sRoomIndex = 0;
+    DungeonRunState.RoomKey _currentKey;
+
+    // 디버그 HUD
+    public System.Collections.Generic.IReadOnlyList<BrickExitHook> DebugHooks => _spawnedBrickHooks;
+    public bool DebugLastBuildWasCleared => _lastBuildWasCleared;
+    public int DebugAliveBricks => aliveBricks;
+    public ExitGate DebugExitGate => _exitGateInstance;
+
     void Awake()
     {
         if (!brickRoot) brickRoot = transform;
         if (!shellRoot) shellRoot = transform;
-        if (!brickSpawnRoot) brickSpawnRoot = brickRoot; // ← 브릭 스폰 기준점
+        if (!brickSpawnRoot) brickSpawnRoot = brickRoot;
     }
 
     void Start()
     {
         if (!Application.isPlaying) return;
 
+        // ★ 타운 → 던전 재진입 시 런 상태 초기화(스냅샷/클리어/Exit 스케줄)
+        if (resetRunOnSceneStart) DungeonRunState.Reset();
+
         if (autoBuildOnPlay) BuildRoomSimple();
         else if (autoScanExistingOnPlay) ForceAttachAndRecount();
 
-        if (aliveBricks == 0) OpenExitAndNotifyClear();
-        StartClearWatchdog();
+        if (aliveBricks > 0) StartClearWatchdog();
     }
 
-    // === 외부에서 호출되는 간단 빌드(기존 시그니처 유지) ===
+    void StopClearWatchdog()
+    {
+        if (clearWatchCR != null)
+        {
+            StopCoroutine(clearWatchCR);
+            clearWatchCR = null;
+        }
+    }
+    void StartClearWatchdog()
+    {
+        if (!enableClearWatchdog) return;
+        StopClearWatchdog();
+        clearWatchCR = StartCoroutine(CoClearWatch());
+    }
+
     public void BuildRoomSimple()
     {
-        // 브릭과 셸을 '각자' 비움
+        StopClearWatchdog();
+
+        // 빌드 직전 UI/모달/카운트다운 정리
+        var gm0 = FindObjectOfType<GameManager>();
+        gm0?.DismissAllModals();
+        gm0?.CancelStartCountdown();
+        gm0?.SetStartUIVisible(false);
+
+        DungeonRunState.EnsureConfigured(exitScheduleMode, forceExitAtRoomNth, randomExitMinNth, randomExitMaxNth);
+
+        _currentKey = new DungeonRunState.RoomKey(roomKeyX, roomKeyY);
+
+        var snap = DungeonRunState.GetOrCreateSnapshot(
+            _currentKey,
+            seedGen: () =>
+            {
+                if (randomizeSeedEachBuild && Application.isPlaying)
+                    return UnityEngine.Random.Range(1, int.MaxValue);
+                return (seed != 0) ? seed : UnityEngine.Random.Range(1, int.MaxValue);
+            },
+            shellPick: () =>
+            {
+                if (wallLayoutPrefabs != null && wallLayoutPrefabs.Length > 0)
+                    return UnityEngine.Random.Range(0, wallLayoutPrefabs.Length);
+                return -1;
+            }
+        );
+
+        DungeonRunState.ReportUniqueVisit(_currentKey);
+        rnd = (snap.seed == 0) ? new System.Random(1234567) : new System.Random(snap.seed);
+
         ClearChildren(brickRoot);
         ClearChildren(shellRoot);
 
-        // 시드
-        if (randomizeSeedEachBuild && Application.isPlaying)
-            seed = UnityEngine.Random.Range(1, int.MaxValue);
-        rnd = (seed == 0) ? new System.Random() : new System.Random(seed);
+        _spawnedBrickHooks.Clear();
+        _exitGateInstance = null;
+        _isExitRoomThisBuild = false;
+        _hasPlannedExitGate = false;
+        _plannedExitGatePos = Vector3.zero;
 
-        // 셸(벽) 배치 → **항상 shellRoot 기준**
+        sRoomIndex++;
+
         GameObject shell = null;
-        if (wallLayoutPrefabs != null && wallLayoutPrefabs.Length > 0)
+        if (wallLayoutPrefabs != null && wallLayoutPrefabs.Length > 0 && snap.shellIndex >= 0)
         {
-            var pick = wallLayoutPrefabs[UnityEngine.Random.Range(0, wallLayoutPrefabs.Length)];
+            var pick = wallLayoutPrefabs[Mathf.Clamp(snap.shellIndex, 0, wallLayoutPrefabs.Length - 1)];
             if (pick)
             {
                 shell = Instantiate(pick,
@@ -157,44 +234,72 @@ public class RoomController : MonoBehaviour
                                     Quaternion.identity,
                                     shellRoot ? shellRoot : null);
 
-                // ▼▼▼ 이번 변경: 내부 오프셋/센터링은 '옵션이 꺼진 경우'에만 실행
                 if (!keepPrefabInternalOffsets)
                 {
                     ZeroLocalGridOffsets(shell);
                     if (autoCenterShell) CenterShellTo(shellRoot ? shellRoot.position : Vector3.zero, shell);
                     if (autoCenterShell) StartCoroutine(CoCenterShellNextFrame(shell));
                 }
-                // ▲▲▲
-
-                // 필요 시 루트 자체 오프셋
                 if (shellSpawnOffset != Vector3.zero) shell.transform.position += shellSpawnOffset;
+
+                if (autoScanWallsForPaddle)
+                    StartCoroutine(CoScanWallsAfterShellSettles(shell));
             }
         }
-
-        // Zone 우선 스폰(브릭은 brickSpawnRoot 기준)
-        bool anyFromZones = false;
-        if (spawnByZonesFirst && shell)
-            anyFromZones = SpawnFromZones(shell);
-
-        // 폴백 그리드
-        if (!anyFromZones)
+        else
         {
-            Vector2 topLeft = CalcTopLeft();
-            if (useMask && layoutMask != null) BuildFromMask(topLeft);
-            else BuildGrid(topLeft);
+            if (autoScanWallsForPaddle)
+                StartCoroutine(CoScanWallsAfterShellSettles(null));
         }
 
-        // HP/색 적용
-        FindObjectOfType<BrickHPAssigner>()?.AssignAll();
+        bool wasCleared = snap.cleared;
+        _lastBuildWasCleared = wasCleared;
 
-        // room 참조 보정
-        ForceAttachAndRecount();
+        _isExitRoomThisBuild = DungeonRunState.IsExitRoom(_currentKey);
 
-        if (exitDoors) exitDoors.Show(false);
-        StartClearWatchdog();
+        var gm = FindObjectOfType<GameManager>();
+
+        if (!wasCleared)
+        {
+            bool anyFromZones = false;
+            if (spawnByZonesFirst && shell) anyFromZones = SpawnFromZones(shell, snap.seed);
+            if (!anyFromZones)
+            {
+                Vector2 topLeft = CalcTopLeft();
+                if (useMask && layoutMask != null) BuildFromMask(topLeft);
+                else BuildGrid(topLeft);
+            }
+
+            FindObjectOfType<BrickHPAssigner>()?.AssignAll();
+            ForceAttachAndRecount();
+
+            if (_isExitRoomThisBuild && exitGateEnable)
+                _hasPlannedExitGate = PlanExitGateSeed();
+
+            if (exitDoors) exitDoors.Show(false);
+
+            if (aliveBricks > 0) StartClearWatchdog();
+
+            // 전투 방 준비: 자동 시작은 하지 않고 Start 대기
+            gm?.PrepareCombatRoomEntry();
+        }
+        else
+        {
+            // 재방문(빈방): 탐험 모드
+            aliveBricks = 0;
+
+            gm?.SetAllUIVisible(true);
+            gm?.DismissAllModals();
+            gm?.CancelStartCountdown();
+            gm?.SetStartUIVisible(false);
+
+            // 탐험 모드 컨티뉴 금지
+            gm?.SetAllowContinue(false);
+
+            if (exitDoors) exitDoors.Show(true);
+        }
     }
 
-    // === 셸 내용물 중심을 target으로 자동 정렬(보강) ===
     void CenterShellTo(Vector3 target, GameObject shell)
     {
         bool any = false;
@@ -230,9 +335,7 @@ public class RoomController : MonoBehaviour
         if (!any) return;
 
         Vector3 delta = target - b.center;
-
-        // 과도한 이동 가드
-        if (delta.sqrMagnitude > 1000f * 1000f) return;
+        if (delta.sqrMagnitude > 1_000_000f) return;
 
         if (centerMoveChildren)
         {
@@ -250,13 +353,12 @@ public class RoomController : MonoBehaviour
         }
     }
 
-    // === 위치 계산/도우미 ===
     Vector2 CalcTopLeft()
     {
         if (gridAnchor == GridAnchor.Center)
         {
             Vector2 center = brickSpawnRoot ? (Vector2)brickSpawnRoot.position : (Vector2)transform.position;
-            center += brickGridOffset; // 미세 오프셋
+            center += brickGridOffset;
             return center + new Vector2(
                 -(cols - 1) * 0.5f * cellSize.x,
                 +(rows - 1) * 0.5f * cellSize.y
@@ -288,7 +390,6 @@ public class RoomController : MonoBehaviour
         return pos + new Vector3(jx, jy, 0f);
     }
 
-    // === 빌드: 일반 그리드(폴백) ===
     void BuildGrid(Vector2 topLeft)
     {
         var candidates = new List<Vector3>();
@@ -364,7 +465,6 @@ public class RoomController : MonoBehaviour
         }
     }
 
-    // === 빌드: 마스크(폴백) ===
     void BuildFromMask(Vector2 topLeft)
     {
         if (!layoutMask) { BuildGrid(topLeft); return; }
@@ -406,60 +506,49 @@ public class RoomController : MonoBehaviour
             SpawnBrick(brickCand[i]);
     }
 
-    // === Zone 우선 스폰 ===
-    bool SpawnFromZones(GameObject shell)
+    bool SpawnFromZones(GameObject shell, int seedForZones)
     {
         var zones = shell.GetComponentsInChildren<ZoneVolume>(true);
         if (zones == null || zones.Length == 0) return false;
 
-        var zrnd = new System.Random(UnityEngine.Random.Range(1, int.MaxValue));
+        var zrnd = new System.Random(seedForZones ^ 0x5A5A5A5A);
         int level = Mathf.Max(0, debugLevel);
 
-        int spawned = 0;
+        int spawnedBricks = 0;
+
         foreach (var z in zones)
         {
             int count = z.ResolveCount(level);
             for (int i = 0; i < count; i++)
             {
                 Vector3 p = z.SamplePointInside(zrnd);
-
                 if (avoidOverlap && Physics2D.OverlapBox(p, CellOverlapSize(), 0f))
                     continue;
 
                 int kind = z.RollKind(zrnd);
                 switch (kind)
                 {
-                    case 0: SpawnBrick(p); break;
-                    case 1:
-                        if (monsterPrefabs != null && monsterPrefabs.Length > 0)
-                            Instantiate(Pick(monsterPrefabs), p, Quaternion.identity, brickRoot);
-                        break;
-                    case 2:
-                        if (chestPrefabs != null && chestPrefabs.Length > 0)
-                            Instantiate(Pick(chestPrefabs), p, Quaternion.identity, brickRoot);
-                        break;
-                    case 3:
-                        if (monsterPrefabs != null && monsterPrefabs.Length > 0)
-                            Instantiate(Pick(monsterPrefabs), p, Quaternion.identity, brickRoot);
-                        break;
+                    case 0: SpawnBrick(p); spawnedBricks++; break;
+                    case 1: if (monsterPrefabs != null && monsterPrefabs.Length > 0) Instantiate(Pick(monsterPrefabs), p, Quaternion.identity, brickRoot); break;
+                    case 2: if (chestPrefabs != null && chestPrefabs.Length > 0) Instantiate(Pick(chestPrefabs), p, Quaternion.identity, brickRoot); break;
+                    case 3: if (monsterPrefabs != null && monsterPrefabs.Length > 0) Instantiate(Pick(monsterPrefabs), p, Quaternion.identity, brickRoot); break;
                 }
-                spawned++;
             }
         }
-        return spawned > 0;
+        return spawnedBricks > 0;
     }
 
-    // === 스폰/유틸 ===
     void SpawnBrick(Vector3 pos)
     {
         if (!brickPrefab) return;
         var go = Instantiate(brickPrefab, pos, Quaternion.identity, brickRoot);
         var br = go.GetComponent<Brick>();
-        if (br)
-        {
-            br.Init(this);
-            aliveBricks++;
-        }
+        if (br) { br.Init(this); aliveBricks++; }
+
+        var hook = go.GetComponent<BrickExitHook>();
+        if (!hook) hook = go.AddComponent<BrickExitHook>();
+        hook.Init(this);
+        _spawnedBrickHooks.Add(hook);
     }
 
     bool TrySpawnRandomExtra(Vector3 pos)
@@ -511,10 +600,13 @@ public class RoomController : MonoBehaviour
         }
     }
 
-    // === 정리/보정 ===
     void ClearChildren(Transform root)
     {
         if (!root) return;
+
+        bool suppressNow = (root == brickRoot);
+        if (suppressNow) PushExitHookSuppress();
+
         for (int i = root.childCount - 1; i >= 0; i--)
         {
             var c = root.GetChild(i);
@@ -522,6 +614,8 @@ public class RoomController : MonoBehaviour
             else DestroyImmediate(c.gameObject);
         }
         if (root == brickRoot) aliveBricks = 0;
+
+        if (suppressNow) PopExitHookSuppress();
     }
 
     void ForceAttachAndRecount()
@@ -534,6 +628,11 @@ public class RoomController : MonoBehaviour
             if (!b || !b.gameObject.activeInHierarchy) continue;
             b.Init(this);
             cnt++;
+
+            var h = b.GetComponent<BrickExitHook>();
+            if (!h) h = b.gameObject.AddComponent<BrickExitHook>();
+            h.Init(this);
+            if (!_spawnedBrickHooks.Contains(h)) _spawnedBrickHooks.Add(h);
         }
         aliveBricks = cnt;
     }
@@ -547,7 +646,6 @@ public class RoomController : MonoBehaviour
         return cnt;
     }
 
-    // === Brick -> Room 알림 ===
     public void NotifyBrickDestroyed()
     {
         aliveBricks = Mathf.Max(0, aliveBricks - 1);
@@ -559,25 +657,68 @@ public class RoomController : MonoBehaviour
         OpenExitAndNotifyClear();
     }
 
+    Coroutine _coOpenExit;
     void OpenExitAndNotifyClear()
     {
-        if (exitDoors) exitDoors.Show(true);
-        var gm = FindObjectOfType<GameManager>();
-        gm?.OnStageClear();
+        if (_coOpenExit != null) StopCoroutine(_coOpenExit);
+        _coOpenExit = StartCoroutine(CoOpenExitAfterCinematic());
     }
 
-    // === 출구 버튼(N/E/S/W) ===
-    public void GoNorth() { BuildRoomSimple(); FindObjectOfType<GameManager>()?.OnNextRoomEntered(); FindObjectOfType<BackgroundManager>()?.NextRoom(); }
-    public void GoEast() { BuildRoomSimple(); FindObjectOfType<GameManager>()?.OnNextRoomEntered(); FindObjectOfType<BackgroundManager>()?.NextRoom(); }
-    public void GoSouth() { BuildRoomSimple(); FindObjectOfType<GameManager>()?.OnNextRoomEntered(); FindObjectOfType<BackgroundManager>()?.NextRoom(); }
-    public void GoWest() { BuildRoomSimple(); FindObjectOfType<GameManager>()?.OnNextRoomEntered(); FindObjectOfType<BackgroundManager>()?.NextRoom(); }
-
-    // === 클리어 감시자 ===
-    void StartClearWatchdog()
+    IEnumerator CoOpenExitAfterCinematic()
     {
-        if (!enableClearWatchdog) return;
-        if (clearWatchCR != null) StopCoroutine(clearWatchCR);
-        clearWatchCR = StartCoroutine(CoClearWatch());
+        var gm = FindObjectOfType<GameManager>();
+        gm?.SendMessage("SetAllUIVisible", false, SendMessageOptions.DontRequireReceiver);
+
+        yield return new WaitForEndOfFrame();
+        while (CinematicFX.I != null && CinematicFX.IsPlaying) yield return null;
+
+        gm?.SendMessage("SetAllUIVisible", true, SendMessageOptions.DontRequireReceiver);
+
+        TMP_Text savedNext = null;
+        bool gatePlanned = (_isExitRoomThisBuild && exitGateEnable && _hasPlannedExitGate);
+        if (gatePlanned && gm)
+        {
+            savedNext = gm.nextStageText;
+            gm.nextStageText = null;
+        }
+
+        DungeonRunState.MarkCleared(_currentKey);
+
+        gm?.OnStageClear();
+
+        if (gatePlanned && exitDoors) exitDoors.Show(false);
+
+        if (gatePlanned)
+        {
+            if (_exitGateInstance == null && exitGatePrefab)
+                SpawnExitGateAt(_plannedExitGatePos);
+
+            if (_exitGateInstance != null)
+                _exitGateInstance.OnGateActivated();
+
+            if (gm) gm.nextStageText = savedNext;
+        }
+
+        _coOpenExit = null;
+    }
+
+    // ===== 방향 버튼: 이동 후 전투방이면 “자동 시작” (Start 버튼을 대신 눌러준다) =====
+    public void GoNorth() { roomKeyY += 1; MoveAndMaybeAutoStart(); }
+    public void GoEast() { roomKeyX += 1; MoveAndMaybeAutoStart(); }
+    public void GoSouth() { roomKeyY -= 1; MoveAndMaybeAutoStart(); }
+    public void GoWest() { roomKeyX -= 1; MoveAndMaybeAutoStart(); }
+
+    void MoveAndMaybeAutoStart()
+    {
+        var gm = FindObjectOfType<GameManager>();
+        var bg = FindObjectOfType<BackgroundManager>();
+
+        BuildRoomSimple();          // 새 방 빌드
+        bg?.NextRoom();
+
+        // 방이 전투방이면 즉시 카운트다운 시작(컨티뉴 화면 방지)
+        if (!DebugLastBuildWasCleared)
+            gm?.OnPressStartButton();   // Start 버튼을 자동으로 눌러줌
     }
 
     IEnumerator CoClearWatch()
@@ -597,29 +738,34 @@ public class RoomController : MonoBehaviour
         }
     }
 
-    [ContextMenu("Rebuild (Simple)")]
-    void EditorRebuild() { BuildRoomSimple(); }
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        if (shellRoot) { Gizmos.color = Color.cyan; Gizmos.DrawSphere(shellRoot.position, 0.12f); }
+        if (brickSpawnRoot) { Gizmos.color = Color.yellow; Gizmos.DrawSphere(brickSpawnRoot.position, 0.12f); }
+    }
+#endif
 
-    // =====================[ 진단/보정 유틸 ]=====================
-
-    // 내부 오프셋 0화(옵션 OFF일 때만 사용)
+    // 내부 오프셋 0화
     void ZeroLocalGridOffsets(GameObject shellGO)
     {
+        if (!shellGO) return;
+
         var tfs = shellGO.GetComponentsInChildren<Transform>(true);
         foreach (var tf in tfs)
         {
+            if (!tf) continue;
             if (tf.GetComponent<Grid>() || tf.GetComponent<Tilemap>())
             {
                 tf.localPosition = Vector3.zero;
                 tf.localRotation = Quaternion.identity;
-                // tf.localScale = Vector3.one;
             }
         }
         var trs = shellGO.GetComponentsInChildren<TilemapRenderer>(true);
-        foreach (var tr in trs) tr.enabled = true;
+        foreach (var tr in trs) if (tr) tr.enabled = true;
     }
 
-    // 다음 프레임 재센터링(옵션 OFF일 때만 사용)
+    // 다음 프레임 재센터링
     IEnumerator CoCenterShellNextFrame(GameObject shell)
     {
         yield return null;
@@ -628,49 +774,77 @@ public class RoomController : MonoBehaviour
         CenterShellTo(target, shell);
     }
 
-#if UNITY_EDITOR
-    void OnDrawGizmosSelected()
+    // 셸 자리 잡은 뒤 벽 경계 지연 스캔
+    IEnumerator CoScanWallsAfterShellSettles(GameObject shell)
     {
-        if (shellRoot)
+        int wait = Mathf.Max(1, wallScanDelayFrames);
+        for (int i = 0; i < wait; i++) yield return null;
+
+        Transform targetRoot = wallsRootForScan ? wallsRootForScan
+                             : (shell ? shell.transform : null);
+
+        if (!targetRoot)
         {
-            Gizmos.color = Color.cyan;
-            Gizmos.DrawSphere(shellRoot.position, 0.12f);
+            var anyTileCol = FindObjectOfType<TilemapCollider2D>();
+            if (anyTileCol) targetRoot = anyTileCol.transform.root;
         }
-        if (brickSpawnRoot)
-        {
-            Gizmos.color = Color.yellow;
-            Gizmos.DrawSphere(brickSpawnRoot.position, 0.12f);
-        }
+
+        var pc = FindObjectOfType<PaddleController>();
+        if (!pc || !targetRoot) yield break;
+
+        pc.RecalcWallEdges(targetRoot);
     }
 
-    [ContextMenu("DEBUG/Dump Renderers Under Shell")]
-    void DebugDumpShellInfo()
+    bool PlanExitGateSeed()
     {
-        if (!shellRoot || shellRoot.childCount == 0)
+        if (_spawnedBrickHooks.Count == 0) return false;
+
+        var cand = new List<BrickExitHook>(_spawnedBrickHooks);
+
+        if (exitGateEdgeMarginCells > 0)
         {
-            Debug.Log("[RoomController] shellRoot 밑에 셸 인스턴스가 없습니다.");
-            return;
+            Vector2 topLeft = CalcTopLeft();
+            float left = topLeft.x + exitGateEdgeMarginCells * cellSize.x;
+            float right = topLeft.x + (cols - 1 - exitGateEdgeMarginCells) * cellSize.x;
+            float top = topLeft.y - exitGateEdgeMarginCells * cellSize.y;
+            float bottom = topLeft.y - (rows - 1 - exitGateEdgeMarginCells) * cellSize.y;
+
+            cand.RemoveAll(h =>
+            {
+                var p = h.transform.position;
+                return !(p.x >= left && p.x <= right && p.y <= top && p.y >= bottom);
+            });
         }
 
-        var shell = shellRoot.GetChild(shellRoot.childCount - 1).gameObject;
-        var rs = shell.GetComponentsInChildren<Renderer>(true);
-        System.Array.Sort(rs, (a, b) => b.bounds.size.sqrMagnitude.CompareTo(a.bounds.size.sqrMagnitude));
-
-        Debug.Log($"[DumpRenderers] total={rs.Length} (큰 순서)");
-        for (int i = 0; i < rs.Length; i++)
+        if (exitGateAreas != null && exitGateAreas.Length > 0)
         {
-            var r = rs[i];
-            var sz = r.bounds.size;
-            var ct = r.bounds.center;
-            Debug.Log($"  #{i:00} {r.GetType().Name} path={GetHierarchyPath(r.transform)} size={sz} center={ct}");
+            cand.RemoveAll(h =>
+            {
+                var p = (Vector2)h.transform.position;
+                bool inside = false;
+                for (int i = 0; i < exitGateAreas.Length; i++)
+                {
+                    var bc = exitGateAreas[i];
+                    if (!bc) continue;
+                    var b = bc.bounds;
+                    if (p.x >= b.min.x && p.x <= b.max.x && p.y >= b.min.y && p.y <= b.max.y) { inside = true; break; }
+                }
+                return !inside;
+            });
         }
+
+        if (cand.Count == 0) cand = _spawnedBrickHooks;
+
+        var pick = cand[Random.Range(0, cand.Count)];
+        _plannedExitGatePos = pick.transform.position; // 위치만 기억
+        return true;
     }
 
-    string GetHierarchyPath(Transform t)
+    public ExitGate SpawnExitGateAt(Vector3 pos)
     {
-        var stack = new Stack<string>();
-        while (t != null) { stack.Push(t.name); t = t.parent; }
-        return string.Join("/", stack);
+        if (!exitGatePrefab) return null;
+        var eg = Instantiate(exitGatePrefab, pos, Quaternion.identity, brickRoot);
+        _exitGateInstance = eg;
+        return eg;
     }
-#endif
 }

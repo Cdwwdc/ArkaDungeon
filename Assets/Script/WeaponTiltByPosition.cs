@@ -1,60 +1,135 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 
-/// ÁÂ/¿ì º®°úÀÇ °Å¸® ºñ·Ê·Î ¹«±â¸¦ ±â¿ïÀÌµÇ, ¿©À¯/ÀÌÂ¡/ºÎµå·¯¿î È¸ÀüÀ» Áö¿ø.
-/// - ¹«±â ÀÚ½Ä(PolygonCollider2D)¿¡ ºÙÀÌ°í rotateTarget(ºÎ¸ğ ÇÇ¹ş) ÁöÁ¤.
-/// - Physics2D Layer Collision Matrix¿¡¼­ Weapon¡¿Walls´Â ÇØÁ¦, Weapon¡¿BallÀº Ã¼Å©.
 [DisallowMultipleComponent]
 public class WeaponTiltByPosition : MonoBehaviour
 {
-    [Header("´ë»ó")]
-    public Transform rotateTarget;      // È¸Àü½ÃÅ³ ºÎ¸ğ ÇÇ¹ş
-    public Transform paddleRoot;        // ºñ¿ì¸é ÀÚµ¿ Å½»ö
-    [Tooltip("·¹ÀÌÄ³½ºÆ® ¿øÁ¡(ºñ¿ì¸é paddleRoot)")]
+    [Header("ëŒ€ìƒ")]
+    [Tooltip("íšŒì „ì‹œí‚¬ í”¼ë²—(ë³´í†µ ë¬´ê¸° ë¶€ëª¨). ë¹„ìš°ë©´ ë¶€ëª¨/ìì‹ ì„ ìë™ ì‚¬ìš©")]
+    public Transform rotateTarget;
+    [Tooltip("íŒ¨ë“¤ì˜ Transform. ë¹„ìš°ë©´ PaddleControllerë¥¼ ì°¾ì•„ ìë™ ì„¤ì •")]
+    public Transform paddleRoot;
+    [Tooltip("ì¢Œìš° ë²½ ê±°ë¦¬ ì¸¡ì •ì˜ ì›ì . ë¹„ìš°ë©´ paddleRoot ì‚¬ìš©")]
     public Transform probeOrigin;
 
-    [Header("º® °Å¸® ÃøÁ¤")]
-    public float probeMaxDistance = 3.0f;      // Áß¾Ó~º® ´ë·« °Å¸®
-    public float probeRadius = 0.08f;          // ÆĞµé/¹«±â µÎ²²¸¸Å­
-    [Tooltip("ºñ¿öµÎ¸é 'Walls' ·¹ÀÌ¾î¸¦ ±âº» »ç¿ë")]
-    public LayerMask wallMask;                  // Walls¸¸ º¸±â
+    [Header("ë²½ ê±°ë¦¬ ì¸¡ì •")]
+    [Tooltip("ê°€ìš´ë°ì—ì„œ í•œìª½ ë²½ê¹Œì§€ ëŒ€ëµ ê±°ë¦¬(ì”¬ ìŠ¤ì¼€ì¼ì— ë§ê²Œ)")]
+    public float probeMaxDistance = 3.0f;
+    [Tooltip("ì„œí´ ìºìŠ¤íŠ¸ ë°˜ê²½(ë¬´ê¸°/íŒ¨ë“¤ì˜ ë‘ê»˜ë§Œí¼)")]
+    public float probeRadius = 0.08f;
+    [Tooltip("ë²½ ë ˆì´ì–´ë§Œ ì²´í¬í•˜ë„ë¡ ì„¤ì •. ë¹„ìš°ë©´ 'Walls' ë ˆì´ì–´ ìë™ ì‚¬ìš©")]
+    public LayerMask wallMask;
 
-    [Header("°¢µµ(Àı´ë ·ÎÄÃ Z)")]
-    [Tooltip("°¡¿îµ¥¿¡¼­ÀÇ ±âº» °¢µµ(ºñ¿ì¸é ÇöÀç È¸Àü Ä¸Ã³)")]
+    [Header("ê°ë„(ì ˆëŒ€ ë¡œì»¬ Z)")]
+    [Tooltip("ê°€ìš´ë°(ë²½ê³¼ ë©€ë¦¬) ìˆì„ ë•Œ ê¸°ì¤€ ê°ë„")]
     public float baseAngleZ = 0f;
-    public float leftWallAngleZ = 0f;           // ¿ŞÂÊ º®ÀÏ¼ö·Ï
-    public float rightWallAngleZ = 0f;          // ¿À¸¥ÂÊ º®ÀÏ¼ö·Ï
+    [Tooltip("ì™¼ìª½ ë²½ì— ê°€ê¹Œì›Œì§ˆìˆ˜ë¡ ë³´ê°„ë  ê°ë„")]
+    public float leftWallAngleZ = 0f;
+    [Tooltip("ì˜¤ë¥¸ìª½ ë²½ì— ê°€ê¹Œì›Œì§ˆìˆ˜ë¡ ë³´ê°„ë  ê°ë„")]
+    public float rightWallAngleZ = 0f;
 
-    [Header("º¸°£/¾ÈÁ¤È­")]
-    [Tooltip("º®À¸·ÎºÎÅÍ ÀÌ °Å¸®±îÁö´Â '¾ÆÁ÷ ºÙÁö ¾ÊÀº °Í'À¸·Î Ãë±Ş(¿©À¯)")]
-    public float wallClearance = 0.20f;         // 0.15~0.35 ±ÇÀå
-    [Tooltip("ÃÖ´ë ±â¿ï±â ºñÀ²(1=¿ÏÀü ¼öÆò±îÁö). 0.9~0.98 ±ÇÀå")]
-    [Range(0.5f, 1f)] public float maxTiltPercent = 0.92f;
+    [Header("ë³´ê°„/ì•ˆì •í™”")]
+    [Tooltip("ë²½ì—ì„œ ì´ ê±°ë¦¬ë§Œí¼ì€ ì•„ì§ 'ë¶™ì§€ ì•Šì€' ì—¬ìœ ë¡œ ê°„ì£¼(ë„ˆë¬´ ì¼ì° ëˆ•ëŠ” ê²ƒ ë°©ì§€)")]
+    public float wallClearance = 0.20f;
+    [Range(0.5f, 1f), Tooltip("ìµœëŒ€ ëˆ•í˜ ë¹„ì¤‘(1=ì •ì˜í•œ ë²½ ê°ë„ê¹Œì§€, 0.9~0.98 ê¶Œì¥)")]
+    public float maxTiltPercent = 0.92f;
 
-    [Header("ÀÌÂ¡(±ÙÁ¢µµ ¡æ ±â¿ïÀÓ ºñÀ²)")]
-    [Tooltip("°¡¿îµ¥¡æº®À¸·Î °¥¼ö·Ï ¾ó¸¶³ª ºü¸£°Ô ´¯ÈúÁö °î¼±À¸·Î Á¦¾î")]
+    [Header("ì´ì§•(ê·¼ì ‘ë„ â†’ ê¸°ìš¸ê¸° ë¹„ìœ¨)")]
+    [Tooltip("ë²½ì— ê°€ê¹Œì›Œì§ˆìˆ˜ë¡ ì–¼ë§ˆë‚˜ ë¹ ë¥´ê²Œ ëˆ•íì§€ ê³¡ì„ ìœ¼ë¡œ ì œì–´(ì´ˆë°˜ ì™„ë§Œ, ë ê¸‰ê²© ê¶Œì¥)")]
     public AnimationCurve responseCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
-    // ±âº» Ä¿ºê¸¦ º® ±ÙÃ³¿¡¼­ ±ŞÇØÁöµµ·Ï ¹Ù²Ù°í ½Í´Ù¸é: new Keyframe[]{ new(0,0,0,2), new(1,1,0,0) }
 
-    [Header("È¸Àü ¹æ½Ä")]
-    [Tooltip("ºÎµå·´°Ô °¡¼Ó/°¨¼ÓÇÏ´Â ½º¹«½º´ïÇÁ »ç¿ë(±ÇÀå)")]
+    // â˜… ê·¼ì ‘ë„ ìŠ¤ë¬´ë”© ì¶”ê°€ (ë°”ìš´ìŠ¤ ì œê±° í•µì‹¬)
+    [Header("ê·¼ì ‘ë„ ì…ë ¥ ìŠ¤ë¬´ë”©")]
+    [Range(0f, 1f), Tooltip("tL/tR(ë²½ ê·¼ì ‘ë„) ìì²´ë¥¼ ì €ì—­í†µê³¼ë¡œ ì•ˆì •í™”(ë°”ìš´ìŠ¤ ì œê±°). 0=ì¦‰ê°, 1=ì•„ì£¼ ëŠë¦¼")]
+    public float proximitySmoothing = 0.25f; // 0=ì¦‰ê°, 1=ì•„ì£¼ ëŠë¦¼
+
+    [Header("íšŒì „ ë°©ì‹")]
+    [Tooltip("ë¶€ë“œëŸ½ê²Œ ìˆ˜ë ´(SmoothDampAngle) ì‚¬ìš©í• ì§€ ì—¬ë¶€")]
     public bool useSmoothDamp = true;
-    [Tooltip("½º¹«½º´ïÇÁ ¸ñÇ¥¿¡ ¼ö·ÅÇÏ´Â ½Ã°£(ÂªÀ»¼ö·Ï ¹ÎÃ¸)")]
+    [Tooltip("ëª©í‘œ ê°ë„ë¡œ ìˆ˜ë ´í•˜ëŠ”ë° ê±¸ë¦¬ëŠ” ì‹œê°„(ì§§ì„ìˆ˜ë¡ ë¯¼ì²©)")]
     public float smoothTime = 0.10f;
-    [Tooltip("½º¹«½º´ïÇÁ ÃÖ´ë °¢¼Óµµ(µµ/ÃÊ)")]
+    [Tooltip("SmoothDampAngleì˜ ìµœëŒ€ ê°ì†ë„(ë„/ì´ˆ)")]
     public float maxAngularSpeed = 1080f;
-    [Tooltip("½º¹«½º´ïÇÁ OFFÀÏ ¶§ °¢¼Óµµ(µµ/ÃÊ)")]
+    [Tooltip("SmoothDamp ë¯¸ì‚¬ìš© ì‹œ ì´ˆë‹¹ íšŒì „ ì†ë„(ë„/ì´ˆ)")]
     public float rotateSpeed = 720f;
 
-    [Header("µğ¹ö±×")]
+    // ===== ì•„ë‚ ë¡œê·¸ ìŠ¤ìœ™ =====
+    [Header("ì—°ì†(ì•„ë‚ ë¡œê·¸) ìŠ¤ìœ™")]
+    [Tooltip("ìˆ˜í‰ ì´ë™ ì†ë„ê°€ ì„ê³„ê°’ì„ ë„˜ì„ ë•Œë§Œ ìŠ¤ìœ™ì„ ì ìš©")]
+    public bool useAnalogSwing = true;
+    [Tooltip("ìŠ¤ìœ™ì´ ì‹œì‘ë˜ëŠ” ìˆ˜í‰ì†ë„ ì„ê³„ê°’(ë¬´ê²Œê°)")]
+    public float speedDeadzone = 0.5f;
+    [Tooltip("ìŠ¤ìœ™ì— ë°˜ì˜ë˜ëŠ” ìµœëŒ€ ìˆ˜í‰ì†ë„(ì´ ì´ìƒì€ ë™ì¼ ì·¨ê¸‰)")]
+    public float speedMax = 12f;
+    [Tooltip("ìŠ¤ìœ™ìœ¼ë¡œ ì¶”ê°€ë˜ëŠ” ìµœëŒ€ ê°ë„(Â±)")]
+    public float maxSwingAngle = 55f;
+    [Tooltip("ìŠ¤ìœ™ ì˜¤ë²„ë ˆì´ê°€ ëª©í‘œê°’ì— ìˆ˜ë ´í•˜ëŠ” ì‹œê°„(ê¸¸ìˆ˜ë¡ ë¬µì§)")]
+    public float analogSmoothTime = 0.06f;
+    [Range(0f, 1f), Tooltip("ìˆ˜í‰ì†ë„ ì¸¡ì • ìì²´ì˜ í•„í„°ë§(0=ì¦‰ê°, 1=ì•„ì£¼ ëŠë¦¬ê²Œ ë°”ë€œ)")]
+    public float velocitySmoothing = 0.15f;
+    [Tooltip("ìŠ¤ìœ™ ë°©í–¥ ë¶€í˜¸(íŠ¹ìˆ˜ ì¼€ì´ìŠ¤ ì•„ë‹ˆë©´ -1 ìœ ì§€)")]
+    public int analogSign = -1;
+
+    [Header("ê³µ íˆíŠ¸ ì„íŒ©íŠ¸(ì„ íƒ)")]
+    [Tooltip("ê³µê³¼ ë¶€ë”ªì¹  ë•Œ ìˆœê°„ ìŠ¤ìœ™ ì„íŒ©íŠ¸ë¥¼ ì¤„ì§€ ì—¬ë¶€")]
+    public bool analogImpactOnBallHit = true;
+    [Tooltip("ê³µ íƒœê·¸ ì´ë¦„")]
+    public string ballTag = "Ball";
+    [Tooltip("íˆíŠ¸ ì‹œ ì¶”ê°€ë˜ëŠ” ì„íŒ©íŠ¸ ê°(ë¶€í˜¸ëŠ” ì¶©ëŒ ë°©í–¥ìœ¼ë¡œ ìë™)")]
+    public float impactAngle = 28f;
+    [Tooltip("ì„íŒ©íŠ¸ ê°ì´ 0ìœ¼ë¡œ ê°ì‡ ë˜ëŠ” ì‹œê°„")]
+    public float impactDampingTime = 0.10f;
+
+    // ===== ë²½ì¸¡ ê³ ì • / ìŠ¤ìœ™ ì•½í™” / ê°ë„ í´ë¨í”„ =====
+    [Header("ë²½ì¸¡ ê³ ì •(ìš”ë™ ë°©ì§€)")]
+    [Range(0.5f, 1f), Tooltip("ë²½ìœ¼ë¡œ ë¶™ì—ˆë‹¤ê³  ê°„ì£¼í•˜ëŠ” ì„ê³„ ê·¼ì ‘ë„(ë“¤ì–´ê°ˆ ë•Œ)")]
+    public float latchEnter = 0.88f;
+    [Range(0.3f, 0.9f), Tooltip("ë¶™ì€ ìƒíƒœì—ì„œ ë–¨ì–´ì¡Œë‹¤ê³  ë³´ëŠ” ì„ê³„ ê·¼ì ‘ë„(ë‚˜ì˜¬ ë•Œ)")]
+    public float latchExit = 0.72f;
+
+    [Header("ë²½ ê·¼ì ‘ ì‹œ ìŠ¤ìœ™ ì•½í™”")]
+    [Range(0f, 1f), Tooltip("ë²½ì— ê±°ì˜ ë¶™ì—ˆì„ ë•Œ ìŠ¤ìœ™ ê¸°ì—¬ë¥¼ ì–¼ë§ˆë‚˜ ì¤„ì¼ì§€ ë¹„ìœ¨")]
+    public float swingNearWallScale = 0.15f;
+
+    [Header("ìµœì¢… ê°ë„ í´ë¨í”„ (ê¸°ì¤€ê° ëŒ€ë¹„ â€˜ìƒëŒ€â€™ ë²”ìœ„)")]
+    [Tooltip("ìµœì¢… ê°ë„ë¥¼ ê¸°ì¤€ê° ëŒ€ë¹„ ìƒëŒ€ ë²”ìœ„ë¡œ ì œí•œí• ì§€")]
+    public bool clampFinalAngle = true;
+    [Tooltip("ê¸°ì¤€ê°ìœ¼ë¡œë¶€í„° í—ˆìš©ë˜ëŠ” ìŒìˆ˜ ë°©í–¥(ì•„ë˜ë¡œ) ê°ë„")]
+    public float minClampZ = -75f;  // â† ê¸°ì¤€ê°ì—ì„œ -75Â°ê¹Œì§€ í—ˆìš© (ì˜ˆ: -45 - 75 = -120)
+    [Tooltip("ê¸°ì¤€ê°ìœ¼ë¡œë¶€í„° í—ˆìš©ë˜ëŠ” ì–‘ìˆ˜ ë°©í–¥(ìœ„ë¡œ) ê°ë„")]
+    public float maxClampZ = 45f;   // â† ê¸°ì¤€ê°ì—ì„œ +45Â°ê¹Œì§€ í—ˆìš© (ì˜ˆ: -45 + 45 = 0)
+
+    // â˜… ê¸°ì¤€ê° ì•„ë˜ ê¸ˆì§€(ìƒëŒ€ í´ë¨í”„)
+    [Header("ê¸°ì¤€ê° ì•„ë˜ ê¸ˆì§€(ìƒëŒ€)")]
+    [Tooltip("ê¸°ì¤€ê°(capturedBaseZ)ë³´ë‹¤ ì•„ë˜(ìŒìˆ˜ delta)ë¡œ ë‚´ë ¤ê°€ë©´ ìœ„ë¡œ ë°˜ì‚¬í•©ë‹ˆë‹¤.")]
+    public bool preventBelowBase = false; // â† ê¸°ë³¸ê°’ false(ì•„ë˜ìª½ë„ í—ˆìš©)
+
+    [Header("ë””ë²„ê·¸")]
+    [Tooltip("ì”¬ ë·°ì— ë ˆì´/ë§ˆì»¤ ë””ë²„ê·¸ ì„ ì„ ê·¸ë¦½ë‹ˆë‹¤")]
     public bool debugDraw = false;
 
+    // ë‚´ë¶€
     float capturedBaseZ;
-    float angularVel; // SmoothDampAngle¿ë
+    float tiltAngularVel;
+    float swingOverlayZ = 0f;
+    float analogVelZ = 0f;
+    float vxFiltered = 0f;
+    float impactZ = 0f, impactVel = 0f;
+    float lastPaddleX;
+
+    // â˜… ê·¼ì ‘ë„ í•„í„°ë§ ë‚´ë¶€ ë³€ìˆ˜
+    float _tLFiltered = 0f, _tRFiltered = 0f;
+    bool _tFilterInit = false;
+
+    enum WallSide { None, Left, Right }
+    WallSide latchedSide = WallSide.None;
+
+    // â˜… ì´ì¤‘ ì„íŒ©íŠ¸ ë°©ì§€
+    float _lastImpactTime = -999f;
+    const float _impactCooldown = 0.05f; // 50ms
 
     void OnEnable()
     {
-        if (!rotateTarget)
-            rotateTarget = transform.parent ? transform.parent : transform;
+        if (!rotateTarget) rotateTarget = transform.parent ? transform.parent : transform;
 
         if (!paddleRoot)
         {
@@ -62,53 +137,133 @@ public class WeaponTiltByPosition : MonoBehaviour
             paddleRoot = pc ? pc.transform : (transform.parent ? transform.parent : transform);
         }
 
-        capturedBaseZ = Mathf.Abs(baseAngleZ) > 0.0001f
-            ? baseAngleZ
-            : rotateTarget.localEulerAngles.z;
-
-        // ±âº» Ä¿ºê°¡ ºñ¾îÀÖÀ¸¸é ¼±Çü
+        capturedBaseZ = Mathf.Abs(baseAngleZ) > 0.0001f ? baseAngleZ : rotateTarget.localEulerAngles.z;
         if (responseCurve == null || responseCurve.length == 0)
             responseCurve = AnimationCurve.Linear(0, 0, 1, 1);
 
-        angularVel = 0f;
+        tiltAngularVel = 0f;
+        analogVelZ = 0f;
+        vxFiltered = 0f;
+        impactZ = 0f; impactVel = 0f;
+        lastPaddleX = paddleRoot ? paddleRoot.position.x : transform.position.x;
+        swingOverlayZ = 0f;
+
+        // â˜… OnEnable ì‹œ í•„í„° ì´ˆê¸°í™”
+        _tFilterInit = false;
+
+        analogSign = (analogSign >= 0) ? 1 : -1;
+
+        // ë„ˆë¬´ êµµì€ íƒì¹¨ìœ¼ë¡œ ë²½ìœ¼ë¡œ íŒì • íŠ€ëŠ” ê²ƒ ì™„í™”
+        if (probeRadius > wallClearance * 0.9f) probeRadius = wallClearance * 0.5f;
     }
 
-    void Update()
+    // â˜… í•µì‹¬ ë³€ê²½: Update â†’ LateUpdate (íŒ¨ë“¤ ìœ„ì¹˜ í™•ì • í›„ ì ìš©)
+    void LateUpdate()
     {
         if (!rotateTarget || !paddleRoot) return;
 
-        // ¿øÁ¡: ÁöÁ¤ ¾øÀ¸¸é ÆĞµé ·çÆ®
+        // 1) ë²½ ê·¼ì ‘ë„
         Vector2 origin = (probeOrigin ? probeOrigin : paddleRoot).position;
-
-        // ÁÂ/¿ì º®±îÁö ½ÇÁ¦ °Å¸®
         float distL = ProbeWalls(origin, Vector2.left);
         float distR = ProbeWalls(origin, Vector2.right);
-
-        // °¢ÂÊÀÇ ±ÙÁ¢µµ(0~1): ¿©À¯(wallClearance)¸¸Å­ »©°í °è»ê
         float tL = ToProximity(distL);
         float tR = ToProximity(distR);
 
-        // ´õ °¡±î¿î ÂÊÀÇ ±ÙÁ¢µµ ¼±ÅÃ ¡æ ÀÌÂ¡ Ä¿ºê Àû¿ë ¡æ ÃÖ´ë ±â¿ï±â Ä¸
-        float t = Mathf.Max(tL, tR);
-        t = Mathf.Clamp01(responseCurve.Evaluate(Mathf.Clamp01(t)));
-        t *= Mathf.Clamp01(maxTiltPercent);
+        // ======== â˜… ê·¼ì ‘ë„ í•„í„°ë§ ë¡œì§ (ë°”ìš´ìŠ¤ ì œê±°) â˜… ========
+        // (1) í•„í„° ì´ˆê¸°í™” (ì²« í”„ë ˆì„ íŠ€ì§€ ì•Šë„ë¡)
+        if (!_tFilterInit)
+        {
+            _tLFiltered = tL;
+            _tRFiltered = tR;
+            _tFilterInit = true;
+        }
 
-        // ¸ñÇ¥ °¢µµ °è»ê
-        float targetZ = (tL >= tR)
-            ? Mathf.LerpAngle(capturedBaseZ, leftWallAngleZ, t)
-            : Mathf.LerpAngle(capturedBaseZ, rightWallAngleZ, t);
+        // (2) ê°€ë²¼ìš´ ì €ì—­í†µê³¼: tFiltered = lerp(tFiltered, tRaw, alpha)
+        float baseAlpha = Mathf.Clamp01(proximitySmoothing);
+        // ê·¼ì ‘í• ìˆ˜ë¡ alphaë¥¼ ì•½ê°„ ë‚®ì¶° ë” ë¶€ë“œëŸ½ê²Œ (ê°€ë³€í˜• LPF)
+        float alphaL = Mathf.Clamp01(baseAlpha * (1f - 0.35f * tL));
+        float alphaR = Mathf.Clamp01(baseAlpha * (1f - 0.35f * tR));
 
-        // Àû¿ë: ½º¹«½º´ïÇÁ or ¼±Çü
-        float current = rotateTarget.localEulerAngles.z;
-        float next;
-        if (useSmoothDamp)
-            next = Mathf.SmoothDampAngle(current, targetZ, ref angularVel, Mathf.Max(0.01f, smoothTime), maxAngularSpeed);
+        _tLFiltered = Mathf.Lerp(_tLFiltered, tL, alphaL);
+        _tRFiltered = Mathf.Lerp(_tRFiltered, tR, alphaR);
+        // ======== â˜… í•„í„°ë§ ë¡œì§ ë â˜… ========
+
+        // (3) ë˜ì¹˜ íŒì •ì€ 'ì›ë³¸ t' (tL/tR)ë¡œ ìœ ì§€ â†’ ìŠ¤ëƒ… íƒ€ì´ë° ìœ ì§€
+        float t = Mathf.Clamp01(responseCurve.Evaluate(Mathf.Max(tL, tR))) * Mathf.Clamp01(maxTiltPercent);
+
+        // ë²½ì¸¡ ê³ ì •(íˆìŠ¤í…Œë¦¬ì‹œìŠ¤)
+        if (latchedSide == WallSide.None)
+        {
+            if (tL >= latchEnter && tL >= tR) latchedSide = WallSide.Left;
+            else if (tR >= latchEnter && tR > tL) latchedSide = WallSide.Right;
+        }
         else
-            next = Mathf.MoveTowardsAngle(current, targetZ, rotateSpeed * Time.deltaTime);
+        {
+            if (latchedSide == WallSide.Left && tL <= latchExit) latchedSide = WallSide.None;
+            if (latchedSide == WallSide.Right && tR <= latchExit) latchedSide = WallSide.None;
+        }
 
-        var e = rotateTarget.localEulerAngles;
-        e.z = next;
-        rotateTarget.localEulerAngles = e;
+        // (4) ëª©í‘œ ê°ë„ ê³„ì‚° ì‹œ 'í•„í„°ëœ t' ì‚¬ìš©
+        float tiltTargetZ =
+          (latchedSide == WallSide.Left) ? Mathf.LerpAngle(capturedBaseZ, leftWallAngleZ, _tLFiltered) :
+          (latchedSide == WallSide.Right) ? Mathf.LerpAngle(capturedBaseZ, rightWallAngleZ, _tRFiltered) :
+          (_tLFiltered >= _tRFiltered) ? Mathf.LerpAngle(capturedBaseZ, leftWallAngleZ, _tLFiltered)
+                 : Mathf.LerpAngle(capturedBaseZ, rightWallAngleZ, _tRFiltered);
+
+        // === ê¸°ì¤€ê° ëŒ€ë¹„ ì„œëª… ë¸íƒ€ ê³µê°„ì—ì„œ ì—°ì†ìŠ¤ìœ™/ì„íŒ©íŠ¸ í•©ì„± ===
+        // 2) ì•„ë‚ ë¡œê·¸ ìŠ¤ìœ™
+        float nowX = paddleRoot.position.x;
+        float vx = (nowX - lastPaddleX) / Mathf.Max(Time.unscaledDeltaTime, 0.0001f);
+        lastPaddleX = nowX;
+
+        vxFiltered = Mathf.Lerp(vxFiltered, vx, 1f - Mathf.Clamp01(velocitySmoothing));
+
+        float desiredAnalog = 0f;
+        if (useAnalogSwing)
+        {
+            float vMag = Mathf.Abs(vxFiltered);
+            if (vMag > speedDeadzone)
+            {
+                float v = Mathf.Clamp(vMag, speedDeadzone, speedMax);
+                float k = (v - speedDeadzone) / Mathf.Max(0.0001f, (speedMax - speedDeadzone));
+                float baseSwing = analogSign * Mathf.Sign(vxFiltered) * (k * Mathf.Abs(maxSwingAngle));
+                if (latchedSide != WallSide.None) baseSwing *= swingNearWallScale;
+                desiredAnalog = baseSwing;
+            }
+        }
+
+        // ì„íŒ©íŠ¸ ê°ì‡ 
+        if (Mathf.Abs(impactZ) > 0.001f)
+            impactZ = Mathf.SmoothDamp(impactZ, 0f, ref impactVel, Mathf.Max(0.01f, impactDampingTime), Mathf.Infinity, Time.unscaledDeltaTime);
+        else
+            impactZ = 0f;
+
+        // (ì ˆëŒ€ê° â†’ ê¸°ì¤€ê° ëŒ€ë¹„ ì„œëª… ë¸íƒ€)
+        float tiltDelta = Mathf.DeltaAngle(capturedBaseZ, tiltTargetZ); // -180..+180
+        float targetSwingOverlay = desiredAnalog + impactZ;
+        swingOverlayZ = Mathf.SmoothDamp(swingOverlayZ, targetSwingOverlay, ref analogVelZ, Mathf.Max(0.01f, analogSmoothTime), Mathf.Infinity, Time.unscaledDeltaTime);
+
+        // í•©ì„±ë„ 'ì„œëª… ë¸íƒ€'ì—ì„œ
+        float finalDelta = tiltDelta + swingOverlayZ;
+
+        // ê¸°ì¤€ê° ì•„ë˜ ê¸ˆì§€(ì›í•˜ë©´)
+        if (preventBelowBase && finalDelta < 0f)
+            finalDelta = Mathf.Abs(finalDelta);
+
+        // ìµœì¢… í´ë¨í”„: ê¸°ì¤€ê° ëŒ€ë¹„ ìƒëŒ€ ë²”ìœ„
+        if (clampFinalAngle)
+            finalDelta = Mathf.Clamp(finalDelta, minClampZ, maxClampZ);
+
+        // ë¸íƒ€ â†’ ì ˆëŒ€ê° ë³µê·€
+        float finalZ = capturedBaseZ + finalDelta;
+
+        // ìŠ¤ë¬´ë”© ì ìš©
+        float cur = rotateTarget.localEulerAngles.z;
+        float next = useSmoothDamp
+            ? Mathf.SmoothDampAngle(cur, finalZ, ref tiltAngularVel, Mathf.Max(0.01f, smoothTime), maxAngularSpeed)
+            : Mathf.MoveTowardsAngle(cur, finalZ, rotateSpeed * Time.deltaTime);
+
+        var e = rotateTarget.localEulerAngles; e.z = next; rotateTarget.localEulerAngles = e;
 
         if (debugDraw)
         {
@@ -117,13 +272,40 @@ public class WeaponTiltByPosition : MonoBehaviour
         }
     }
 
-    // °Å¸® ¡æ ±ÙÁ¢µµ(0~1). clearance ¾ÈÂÊÀ¸·Î´Â 1·Î ¼ö·ÅÇÏÁö ¾Ê°Ô ¿ÏÃæ.
+    void OnCollisionEnter2D(Collision2D col)
+    {
+        if (!analogImpactOnBallHit) return;
+        if (!col.collider || !col.collider.CompareTag(ballTag)) return;
+        if (Time.unscaledTime - _lastImpactTime < _impactCooldown) return; // â˜… ì´ì¤‘ ë°©ì§€
+
+        float dirSign = (col.contactCount > 0) ? Mathf.Sign(col.GetContact(0).relativeVelocity.x) : Mathf.Sign(vxFiltered);
+        if (Mathf.Approximately(dirSign, 0f)) dirSign = 1f;
+
+        impactZ += Mathf.Sign(dirSign) * impactAngle;
+        impactZ = Mathf.Clamp(impactZ, -Mathf.Abs(maxSwingAngle), Mathf.Abs(maxSwingAngle));
+        _lastImpactTime = Time.unscaledTime; // â˜… ê°±ì‹ 
+    }
+
+    void OnTriggerEnter2D(Collider2D other)
+    {
+        if (!analogImpactOnBallHit) return;
+        if (!other || !other.CompareTag(ballTag)) return;
+        if (Time.unscaledTime - _lastImpactTime < _impactCooldown) return; // â˜… ì´ì¤‘ ë°©ì§€
+
+        float dirSign = Mathf.Sign(vxFiltered);
+        if (Mathf.Approximately(dirSign, 0f)) dirSign = 1f;
+
+        impactZ += dirSign * impactAngle;
+        impactZ = Mathf.Clamp(impactZ, -Mathf.Abs(maxSwingAngle), Mathf.Abs(maxSwingAngle));
+        _lastImpactTime = Time.unscaledTime; // â˜… ê°±ì‹ 
+    }
+
+    // ===== ìœ í‹¸ =====
     float ToProximity(float distance)
     {
         float max = Mathf.Max(0.05f, probeMaxDistance);
-        float d = Mathf.Max(0f, distance - Mathf.Max(0f, wallClearance)); // ¿©À¯¸¸Å­ »©°í
-        float t = 1f - Mathf.Clamp01(d / max);                            // ±âº» ±ÙÁ¢µµ
-        return t;
+        float d = Mathf.Max(0f, distance - Mathf.Max(0f, wallClearance));
+        return 1f - Mathf.Clamp01(d / max);
     }
 
     float ProbeWalls(Vector2 origin, Vector2 dir)
@@ -137,10 +319,8 @@ public class WeaponTiltByPosition : MonoBehaviour
         foreach (var h in hits)
         {
             if (!h.collider || h.collider.isTrigger) continue;
-            // ÀÚ±â ÆĞµé/¹«±â °èÃş ¹«½Ã
             var tr = h.collider.transform;
             if (paddleRoot && (tr == paddleRoot || tr.IsChildOf(paddleRoot))) continue;
-
             if (h.distance < nearest) nearest = h.distance;
         }
         return nearest;
@@ -153,4 +333,12 @@ public class WeaponTiltByPosition : MonoBehaviour
         Debug.DrawLine(end + Vector2.up * probeRadius, end - Vector2.up * probeRadius, c, 0f);
         Debug.DrawLine(end + Vector2.right * probeRadius, end - Vector2.right * probeRadius, c, 0f);
     }
+
+#if UNITY_EDITOR
+    void OnValidate()
+    {
+        analogSign = (analogSign >= 0) ? 1 : -1;
+        if (latchExit > latchEnter) latchExit = latchEnter - 0.02f;
+    }
+#endif
 }

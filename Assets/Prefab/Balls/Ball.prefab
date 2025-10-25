@@ -48,15 +48,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   startSpeed: 4
+  launchMinSpeed: 4
   minSpeed: 4
   maxSpeed: 9
-  launchMinSpeed: 4
-  speedAfterFirstHit: 4.5
   hitSpeedGain: 0.1
   axisLockDot: 0.995
   diagLockDot: 0.995
   nudgeDegrees: 20
   minVerticalDot: 0.35
+  deadZoneTag: DeadZone
+  killY: -9
+  onBallDeath:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!58 &3266534028134141219
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -115,7 +119,7 @@ Rigidbody2D:
   m_ExcludeLayers:
     serializedVersion: 2
     m_Bits: 0
-  m_Interpolate: 0
+  m_Interpolate: 1
   m_SleepingMode: 1
   m_CollisionDetection: 1
   m_Constraints: 0

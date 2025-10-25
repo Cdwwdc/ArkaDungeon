@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Ball
   - Paddle
+  - DeadZone
   layers:
   - Default
   - TransparentFX
@@ -42,4 +43,10 @@ TagManager:
   m_SortingLayers:
   - name: Default
     uniqueID: 0
+    locked: 0
+  - name: Background
+    uniqueID: 3859615651
+    locked: 0
+  - name: Effect
+    uniqueID: 1888018229
     locked: 0
