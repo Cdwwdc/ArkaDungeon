@@ -2115,7 +2115,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   room: {fileID: 0}
-  guiPos: {x: 10, y: 100}
+  guiPos: {x: 10, y: 200}
   show: 1
 --- !u!1 &925938771
 GameObject:
@@ -5624,9 +5624,9 @@ MonoBehaviour:
   exitGateEdgeMarginCells: 0
   exitGateAreas: []
   exitScheduleMode: 1
-  forceExitAtRoomNth: 2
-  randomExitMinNth: 3
-  randomExitMaxNth: 6
+  forceExitAtRoomNth: 1
+  randomExitMinNth: 2
+  randomExitMaxNth: 5
   roomKeyX: 0
   roomKeyY: 0
   resetRunOnSceneStart: 1

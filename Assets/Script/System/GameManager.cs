@@ -20,7 +20,7 @@ public class GameManager : MonoBehaviour
     public TMP_Text gameOverText;
 
     [Header("Start UI")]
-    public GameObject startPanel;   // Start 버튼의 OnClick → OnPressStartButton() 연결
+    public GameObject startPanel; // Start 버튼 → OnPressStartButton
 
     [Header("설정")]
     public float countdownInterval = 1.0f;
@@ -44,11 +44,12 @@ public class GameManager : MonoBehaviour
     private bool continueShown = false;
     public bool IsContinueShown() => continueShown;
 
-    // 직전 방 → 다음 방 이월 파라미터
+    // 다음 방 이월 파라미터
     private float lastStageEndSpeed = 0f;
     private bool applyCarryNextLaunch = false;
     private int carryBallCount = 1;      // 직전 방에서 살아남은 공 수(최소 1)
-    private int pendingSpawnCount = 1;   // 다음 방에서 실제로 생성할 공 수
+    private int pendingSpawnCount = 1;   // 이번 방 시작 시 생성할 공 수
+    private bool spawnCountAppliedThisRoom = false; // 곱연산/누적 방지
 
     [Header("Ball Carry-over")]
     public bool carryBallBetweenStages = true;
@@ -72,20 +73,19 @@ public class GameManager : MonoBehaviour
     public Canvas[] canvasesToToggle;
     public GameObject[] uiRootsToToggle;
 
-    // 탐험(비전투) 방에서 컨티뉴 노출 금지
+    // 탐험(비전투) 방에서 컨티뉴 금지
     private bool allowContinueUI = true;
     public void SetAllowContinue(bool v)
     {
         allowContinueUI = v;
-        if (!v) DismissAllModals(); // 탐험 모드 진입 시 혹시 뜬 모달 제거
+        if (!v) DismissAllModals();
     }
 
-    // ====== 외부에서 호출하는 UI/상태 유틸 ======
+    // ===== 외부 유틸 =====
     public void DismissAllModals()
     {
         if (continuePanel) continuePanel.SetActive(false);
         if (nextStageText) nextStageText.gameObject.SetActive(false);
-        // ExitGateUI 등 외부 모달은 각자 CloseIfOpen 패턴 권장
     }
 
     public void CancelStartCountdown()
@@ -104,9 +104,7 @@ public class GameManager : MonoBehaviour
         if (uiCanvas && v && !uiCanvas.enabled) uiCanvas.enabled = true;
     }
 
-    /// <summary>
-    /// 전투 방 입장 준비: 자동 시작 금지, Start 누를 때까지 대기
-    /// </summary>
+    /// 전투 방 입장 준비(자동 시작 금지, Start 대기) — 기본 동작
     public void PrepareCombatRoomEntry()
     {
         SetAllUIVisible(true);
@@ -114,33 +112,39 @@ public class GameManager : MonoBehaviour
         if (nextStageText) nextStageText.gameObject.SetActive(false);
         if (exitDoors) exitDoors.Show(false);
 
-        FindObjectOfType<BrickHPAssigner>()?.AssignAll();
-
-        if (ballManager != null) ballManager.ResetForNewRoom();
+        // 혹시 남아있는 공/등록 정리 (중복 스폰/곱연산 방지)
+        KillBall();
+        if (ballManager != null) { ballManager.ClearAll(); ballManager.ResetForNewRoom(); }
         currentBall = null;
 
-        // “직전 방에서 살아남은 공 수”를 딱 1회 반영
+        // “직전 방에서 살아남은 공 수”를 이번 방에 딱 1회 적용
         pendingSpawnCount = carryBallBetweenStages ? Mathf.Max(1, carryBallCount) : 1;
         applyCarryNextLaunch = carryBallBetweenStages;
+        spawnCountAppliedThisRoom = false;
 
         SetPaddleVisible(true);
         paddle?.GetComponent<PaddleController>()?.SetInputEnabled(true);
 
-        // 전투 방에서는 컨티뉴 허용
-        SetAllowContinue(true);
+        // 전투가 시작되기 전까지는 컨티뉴 금지
+        SetAllowContinue(false);
 
         isTransitioning = false;
 
-        // ★자동 시작 금지: Start UI 노출, 버튼 눌러야 시작
+        // 기본은 Start 버튼 누르기 전까지 대기
         SetStartUIVisible(true);
     }
 
-    /// <summary>
-    /// Start 버튼 OnClick. 자동 시작 시에도 이걸 호출하면 동일 흐름.
-    /// </summary>
+    /// 다음 스테이지 입장 시에는 자동 카운트다운(스타트 버튼 노출 X)
+    public void OnNextRoomEntered()
+    {
+        PrepareCombatRoomEntry();
+        SetStartUIVisible(false);
+        StartCountdownOnce(); // 자동 3,2,1
+    }
+
     public void OnPressStartButton()
     {
-        if (countdownCR != null) return;   // 중복 방지
+        if (countdownCR != null) return;
         SetStartUIVisible(false);
         StartCountdownOnce();
     }
@@ -156,7 +160,7 @@ public class GameManager : MonoBehaviour
         if (ballManager != null) ballManager.ClearAll();
 
         var leftovers = GameObject.FindGameObjectsWithTag("Ball");
-        foreach (var b in leftovers) if (b != null) Destroy(b);
+        foreach (var b in leftovers) if (b != null) Object.Destroy(b);
 
         currentBall = null;
     }
@@ -177,7 +181,7 @@ public class GameManager : MonoBehaviour
     {
         if (!ballPrefab) { Debug.LogError("[GM] ballPrefab 미설정"); return null; }
 
-        var go = Instantiate(ballPrefab, pos, Quaternion.identity);
+        var go = Object.Instantiate(ballPrefab, pos, Quaternion.identity);
         var ball = go.GetComponent<Ball>();
         if (ball) ball.ResetLaunchPhase();
 
@@ -202,7 +206,8 @@ public class GameManager : MonoBehaviour
 
     public IEnumerator CountdownAndLaunch()
     {
-        KillBall(); // 방 시작 직전 잔여 공 정리
+        // 시작 전 잔여 공 정리 (곱연산 방지)
+        KillBall();
 
         if (countdownText)
         {
@@ -231,6 +236,7 @@ public class GameManager : MonoBehaviour
             applyCarryNextLaunch = false;
         }
 
+        // ▶ 스폰 수는 이번 방에서 “한 번만” 적용
         int n = Mathf.Max(1, pendingSpawnCount);
         float spread = Mathf.Max(0f, carrySplitAngle);
         float mid = (n - 1) * 0.5f;
@@ -241,6 +247,24 @@ public class GameManager : MonoBehaviour
             Vector2 dir = RotateDeg(baseDir, off);
             SpawnBallAt(spawnPos, dir, desired);
         }
+
+        // ★안전핀: 시작 직후 ‘정확히 n개’만 존재하도록 정규화(합/곱 증가 차단)
+        var liveNow = Object.FindObjectsOfType<Ball>(false);
+        if (liveNow.Length > n)
+        {
+            // 뒤에서부터 잘라내기(임의지만 일관성 있음)
+            for (int i = liveNow.Length - 1; i >= n; --i)
+            {
+                var go = liveNow[i] ? liveNow[i].gameObject : null;
+                if (go) Object.Destroy(go);
+            }
+        }
+
+        spawnCountAppliedThisRoom = true;
+        pendingSpawnCount = 1; // 다음 방 계산 전 기본치로 복귀(중복 누적 방지)
+
+        // 전투 시작됐으니 컨티뉴 허용
+        SetAllowContinue(true);
 
         if (invincibleDuration > 0f) StartCoroutine(InvincibleFXAndGuard(invincibleDuration));
     }
@@ -279,7 +303,7 @@ public class GameManager : MonoBehaviour
         SpriteRenderer[] padR = paddle ? paddle.GetComponentsInChildren<SpriteRenderer>(true) : null;
 
         float killY = (paddle ? paddle.position.y - 5f : -5f);
-        var dz = FindObjectOfType<DeathZone>();
+        var dz = Object.FindObjectOfType<DeathZone>();
         if (dz) killY = dz.GetKillY();
 
         bool on = true;
@@ -320,10 +344,9 @@ public class GameManager : MonoBehaviour
     // ===== UI/플로우 =====
     public void ShowContinue()
     {
-        // 탐험(비전투) 또는 전환중일 때는 컨티뉴 금지
         if (!allowContinueUI || isTransitioning) return;
 
-        FindObjectOfType<SlowMoFX>()?.PlayDeathFX();
+        Object.FindObjectOfType<SlowMoFX>()?.PlayDeathFX();
 
         continueShown = true;
         if (uiCanvas && !uiCanvas.enabled) uiCanvas.enabled = true;
@@ -355,6 +378,10 @@ public class GameManager : MonoBehaviour
         if (continuePanel) continuePanel.SetActive(false);
         if (gameOverText) gameOverText.gameObject.SetActive(true);
 
+        // 두 번 묻는 문제 방지
+        isTransitioning = true;
+        KillBall();
+
         continueShown = false;
         paddle?.GetComponent<PaddleController>()?.SetInputEnabled(false);
 
@@ -366,6 +393,7 @@ public class GameManager : MonoBehaviour
         yield return new WaitForSecondsRealtime(Mathf.Max(0f, restartDelay));
 
         if (loadSceneOnGameOver && !string.IsNullOrEmpty(gameOverSceneName)
+            && SceneManager.GetActiveScene().name != gameOverSceneName
             && Application.CanStreamedLevelBeLoaded(gameOverSceneName))
         {
             SceneManager.LoadScene(gameOverSceneName, LoadSceneMode.Single);
@@ -379,11 +407,11 @@ public class GameManager : MonoBehaviour
 
         KillBall();
 
-        var rc = FindObjectOfType<RoomController>();
+        var rc = Object.FindObjectOfType<RoomController>();
         if (rc) rc.BuildRoomSimple();
-        FindObjectOfType<BackgroundManager>()?.NextRoom();
+        Object.FindObjectOfType<BackgroundManager>()?.NextRoom();
 
-        FindObjectOfType<BrickHPAssigner>()?.AssignAll();
+        Object.FindObjectOfType<BrickHPAssigner>()?.AssignAll();
 
         if (ballManager != null) ballManager.ResetForNewRoom();
         currentBall = null;
@@ -393,7 +421,6 @@ public class GameManager : MonoBehaviour
         SetPaddleVisible(true);
         paddle?.GetComponent<PaddleController>()?.SetInputEnabled(true);
 
-        // 재시작(같은 씬)일 때는 편의상 자동 시작
         StartCountdownOnce();
     }
 
@@ -401,9 +428,9 @@ public class GameManager : MonoBehaviour
     {
         isTransitioning = true;
 
-        FindObjectOfType<SlowMoFX>()?.PlayClearFX();
+        Object.FindObjectOfType<SlowMoFX>()?.PlayClearFX();
 
-        // 직전 방 ‘살아남은’ 공 수 + 속도 기록 (다음 방에서 정확히 반영)
+        // 직전 방 ‘살아남은’ 공 수 + 속도 기록 (★중복 카운트 방지: 컴포넌트 기준만)
         carryBallCount = carryBallBetweenStages ? Mathf.Max(1, CountLiveBallsStrict()) : 1;
         lastStageEndSpeed = SampleMaxBallSpeed();
 
@@ -423,12 +450,9 @@ public class GameManager : MonoBehaviour
 
         KillBall();
         ResolveItemsOnStageClear();
-    }
 
-    // (레거시 호환) 외부에서 호출 중이면 내부적으로 전투 방 준비만 수행
-    public void OnNextRoomEntered()
-    {
-        PrepareCombatRoomEntry();
+        // 이동 중에는 컨티뉴 금지
+        SetAllowContinue(false);
     }
 
     private IEnumerator Blink(GameObject go, float interval)
@@ -461,31 +485,21 @@ public class GameManager : MonoBehaviour
 
     int CountLiveBallsStrict()
     {
-        int byComponent = 0;
-        var comps = FindObjectsOfType<Ball>(false);
+        // ★중복계수 방지: 태그/풀링 잔재 무시하고 ‘Ball 컴포넌트 + 활성’만 센다
+        int count = 0;
+        var comps = Object.FindObjectsOfType<Ball>(false);
         foreach (var c in comps)
         {
             if (!c) continue;
-            var go = c.gameObject;
-            if (!go.activeInHierarchy) continue;
-            byComponent++;
+            if (!c.gameObject.activeInHierarchy) continue;
+            count++;
         }
-
-        int byTag = 0;
-        var gos = GameObject.FindGameObjectsWithTag("Ball");
-        foreach (var go in gos)
-        {
-            if (!go) continue;
-            if (!go.activeInHierarchy) continue;
-            byTag++;
-        }
-
-        return Mathf.Max(1, Mathf.Max(byComponent, byTag));
+        return Mathf.Max(1, count);
     }
 
     void ResolveItemsOnStageClear()
     {
-        var items = FindObjectsOfType<StageItemPolicy>(false);
+        var items = Object.FindObjectsOfType<StageItemPolicy>(false);
         foreach (var it in items)
         {
             if (!it || !it.gameObject.activeInHierarchy) continue;
@@ -494,10 +508,10 @@ public class GameManager : MonoBehaviour
             {
                 case StageItemPolicy.StageClearBehavior.AutoCollect:
                     it.gameObject.SendMessage("CollectImmediately", SendMessageOptions.DontRequireReceiver);
-                    Destroy(it.gameObject);
+                    Object.Destroy(it.gameObject);
                     break;
                 case StageItemPolicy.StageClearBehavior.Disappear:
-                    Destroy(it.gameObject);
+                    Object.Destroy(it.gameObject);
                     break;
                 case StageItemPolicy.StageClearBehavior.None:
                 default:
@@ -514,7 +528,7 @@ public class GameManager : MonoBehaviour
         return new Vector2(v.x * cs - v.y * sn, v.x * sn + v.y * cs);
     }
 
-    // ===== Game Over 연출 =====
+    // ===== 게임오버 연출 =====
     IEnumerator GameOverSequence()
     {
         bool skip = false;
@@ -594,7 +608,6 @@ public class GameManager : MonoBehaviour
             && Application.CanStreamedLevelBeLoaded(gameOverSceneName))
         {
             SceneManager.LoadScene(gameOverSceneName, LoadSceneMode.Single);
-
         }
         else
         {
@@ -651,15 +664,8 @@ public class GameManager : MonoBehaviour
         SetTMPAlpha(txt, to);
     }
 
-    void SetImageAlpha(Image img, float a)
-    {
-        var c = img.color; c.a = a; img.color = c;
-    }
-
-    void SetTMPAlpha(TMP_Text txt, float a)
-    {
-        var c = txt.color; c.a = a; txt.color = c;
-    }
+    void SetImageAlpha(Image img, float a) { var c = img.color; c.a = a; img.color = c; }
+    void SetTMPAlpha(TMP_Text txt, float a) { var c = txt.color; c.a = a; txt.color = c; }
 
     public void HideNextStageUIAndStopBlink()
     {
@@ -689,20 +695,9 @@ public class GameManager : MonoBehaviour
     public void SetAllUIVisible(bool v)
     {
         if (canvasesToToggle != null)
-        {
-            for (int i = 0; i < canvasesToToggle.Length; i++)
-            {
-                var c = canvasesToToggle[i];
-                if (c) c.enabled = v;
-            }
-        }
+            foreach (var c in canvasesToToggle) if (c) c.enabled = v;
+
         if (uiRootsToToggle != null)
-        {
-            for (int i = 0; i < uiRootsToToggle.Length; i++)
-            {
-                var go = uiRootsToToggle[i];
-                if (go) go.SetActive(v);
-            }
-        }
+            foreach (var go in uiRootsToToggle) if (go) go.SetActive(v);
     }
 }

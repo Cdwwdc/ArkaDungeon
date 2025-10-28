@@ -138,11 +138,14 @@ public class RoomController : MonoBehaviour
     static int sRoomIndex = 0;
     DungeonRunState.RoomKey _currentKey;
 
-    // 디버그 HUD
+    // 디버그 HUD (외부 HUD가 읽을 수 있게 공개 Getter만 추가)
     public System.Collections.Generic.IReadOnlyList<BrickExitHook> DebugHooks => _spawnedBrickHooks;
     public bool DebugLastBuildWasCleared => _lastBuildWasCleared;
     public int DebugAliveBricks => aliveBricks;
     public ExitGate DebugExitGate => _exitGateInstance;
+    public bool DebugIsExitRoomThisBuild => _isExitRoomThisBuild; // NEW
+    public bool DebugHasPlannedExitGate => _hasPlannedExitGate;   // NEW
+    public bool DebugExitPrefabExists => exitGatePrefab != null;  // NEW
 
     void Awake()
     {
@@ -155,11 +158,23 @@ public class RoomController : MonoBehaviour
     {
         if (!Application.isPlaying) return;
 
-        // ★ 타운 → 던전 재진입 시 런 상태 초기화(스냅샷/클리어/Exit 스케줄)
+        // 타운 → 던전 재진입 시 런 상태 초기화
         if (resetRunOnSceneStart) DungeonRunState.Reset();
 
-        if (autoBuildOnPlay) BuildRoomSimple();
-        else if (autoScanExistingOnPlay) ForceAttachAndRecount();
+        // ---------------------------------------------------------------------
+        // 중복 호출 수정: DungeonRunState.IsInitialized를 사용하여
+        // NextStageButtonsBinder 등에 의한 GoNorth 호출 시 중복 빌드를 방지하고
+        // 첫 씬 로드 시에만 BuildRoomSimple()이 호출되도록 변경
+        // ---------------------------------------------------------------------
+        if (!DungeonRunState.IsInitialized)
+        {
+            BuildRoomSimple();
+        }
+        else if (autoScanExistingOnPlay)
+        {
+            ForceAttachAndRecount();
+        }
+        // ---------------------------------------------------------------------
 
         if (aliveBricks > 0) StartClearWatchdog();
     }
@@ -189,6 +204,7 @@ public class RoomController : MonoBehaviour
         gm0?.CancelStartCountdown();
         gm0?.SetStartUIVisible(false);
 
+        // 인스펙터 값으로 스케줄 확정(첫 방에서만 실효, 이후 고정)
         DungeonRunState.EnsureConfigured(exitScheduleMode, forceExitAtRoomNth, randomExitMinNth, randomExitMaxNth);
 
         _currentKey = new DungeonRunState.RoomKey(roomKeyX, roomKeyY);
@@ -209,9 +225,11 @@ public class RoomController : MonoBehaviour
             }
         );
 
-        DungeonRunState.ReportUniqueVisit(_currentKey);
+        // 유니크 방문 보고 (여기서 중복 카운팅이 발생했었으므로 제거)
+        // DungeonRunState.ReportUniqueVisit(_currentKey); // ★★★ 제거된 줄 ★★★
         rnd = (snap.seed == 0) ? new System.Random(1234567) : new System.Random(snap.seed);
 
+        // 이전 잔재 정리
         ClearChildren(brickRoot);
         ClearChildren(shellRoot);
 
@@ -230,9 +248,9 @@ public class RoomController : MonoBehaviour
             if (pick)
             {
                 shell = Instantiate(pick,
-                                    shellRoot ? shellRoot.position : Vector3.zero,
-                                    Quaternion.identity,
-                                    shellRoot ? shellRoot : null);
+                                         shellRoot ? shellRoot.position : Vector3.zero,
+                                         Quaternion.identity,
+                                         shellRoot ? shellRoot : null);
 
                 if (!keepPrefabInternalOffsets)
                 {
@@ -273,6 +291,7 @@ public class RoomController : MonoBehaviour
             FindObjectOfType<BrickHPAssigner>()?.AssignAll();
             ForceAttachAndRecount();
 
+            // 출구방이면 이 시점에 '한 번만' 위치 계획
             if (_isExitRoomThisBuild && exitGateEnable)
                 _hasPlannedExitGate = PlanExitGateSeed();
 
@@ -280,7 +299,7 @@ public class RoomController : MonoBehaviour
 
             if (aliveBricks > 0) StartClearWatchdog();
 
-            // 전투 방 준비: 자동 시작은 하지 않고 Start 대기
+            // 전투 방 준비(다음 방에서는 GameManager가 자동 카운트다운)
             gm?.PrepareCombatRoomEntry();
         }
         else
@@ -288,7 +307,9 @@ public class RoomController : MonoBehaviour
             // 재방문(빈방): 탐험 모드
             aliveBricks = 0;
 
+            // gm?.SendMessage("SetAllUIVisible", true, SendMessageOptions.DontRequireReceiver); // ★★★ 변경됨: Direct Call
             gm?.SetAllUIVisible(true);
+
             gm?.DismissAllModals();
             gm?.CancelStartCountdown();
             gm?.SetStartUIVisible(false);
@@ -297,6 +318,19 @@ public class RoomController : MonoBehaviour
             gm?.SetAllowContinue(false);
 
             if (exitDoors) exitDoors.Show(true);
+
+            // 이미 출구방으로 선정된 방이라면, 기억된 위치로 재소환 + UI 자동
+            if (_isExitRoomThisBuild && exitGateEnable)
+            {
+                if (DungeonRunState.TryGetExitGatePos(_currentKey, out var remembered))
+                {
+                    if (_exitGateInstance == null)
+                        SpawnExitGateAt(remembered);
+
+                    if (_exitGateInstance != null)
+                        _exitGateInstance.OnGateActivated(); // 질문 패널 자동
+                }
+            }
         }
     }
 
@@ -379,7 +413,7 @@ public class RoomController : MonoBehaviour
     Vector2 CellOverlapSize()
     {
         return new Vector2(cellSize.x * Mathf.Clamp01(overlapBoxScale.x),
-                           cellSize.y * Mathf.Clamp01(overlapBoxScale.y));
+                             cellSize.y * Mathf.Clamp01(overlapBoxScale.y));
     }
 
     Vector3 Jitter(Vector3 pos)
@@ -667,12 +701,15 @@ public class RoomController : MonoBehaviour
     IEnumerator CoOpenExitAfterCinematic()
     {
         var gm = FindObjectOfType<GameManager>();
-        gm?.SendMessage("SetAllUIVisible", false, SendMessageOptions.DontRequireReceiver);
+
+        // gm?.SendMessage("SetAllUIVisible", false, SendMessageOptions.DontRequireReceiver); // ★★★ 변경됨: Direct Call
+        gm?.SetAllUIVisible(false);
 
         yield return new WaitForEndOfFrame();
         while (CinematicFX.I != null && CinematicFX.IsPlaying) yield return null;
 
-        gm?.SendMessage("SetAllUIVisible", true, SendMessageOptions.DontRequireReceiver);
+        // gm?.SendMessage("SetAllUIVisible", true, SendMessageOptions.DontRequireReceiver); // ★★★ 변경됨: Direct Call
+        gm?.SetAllUIVisible(true);
 
         TMP_Text savedNext = null;
         bool gatePlanned = (_isExitRoomThisBuild && exitGateEnable && _hasPlannedExitGate);
@@ -690,11 +727,15 @@ public class RoomController : MonoBehaviour
 
         if (gatePlanned)
         {
+            // 계획된 좌표만 사용 (클리어 시 재계획 없음)
             if (_exitGateInstance == null && exitGatePrefab)
                 SpawnExitGateAt(_plannedExitGatePos);
 
             if (_exitGateInstance != null)
+            {
+                DungeonRunState.RememberExitGatePos(_currentKey, _plannedExitGatePos);
                 _exitGateInstance.OnGateActivated();
+            }
 
             if (gm) gm.nextStageText = savedNext;
         }
@@ -702,7 +743,7 @@ public class RoomController : MonoBehaviour
         _coOpenExit = null;
     }
 
-    // ===== 방향 버튼: 이동 후 전투방이면 “자동 시작” (Start 버튼을 대신 눌러준다) =====
+    // 방향 버튼
     public void GoNorth() { roomKeyY += 1; MoveAndMaybeAutoStart(); }
     public void GoEast() { roomKeyX += 1; MoveAndMaybeAutoStart(); }
     public void GoSouth() { roomKeyY -= 1; MoveAndMaybeAutoStart(); }
@@ -713,12 +754,12 @@ public class RoomController : MonoBehaviour
         var gm = FindObjectOfType<GameManager>();
         var bg = FindObjectOfType<BackgroundManager>();
 
-        BuildRoomSimple();          // 새 방 빌드
+        BuildRoomSimple();     // 새 방 빌드
         bg?.NextRoom();
 
-        // 방이 전투방이면 즉시 카운트다운 시작(컨티뉴 화면 방지)
+        // 방이 전투방이면 즉시 카운트다운 시작(스타트 버튼 없이)
         if (!DebugLastBuildWasCleared)
-            gm?.OnPressStartButton();   // Start 버튼을 자동으로 눌러줌
+            gm?.OnNextRoomEntered();   // 자동 카운트다운
     }
 
     IEnumerator CoClearWatch()
@@ -835,7 +876,9 @@ public class RoomController : MonoBehaviour
 
         if (cand.Count == 0) cand = _spawnedBrickHooks;
 
-        var pick = cand[Random.Range(0, cand.Count)];
+        // ★★★ 변경됨: UnityEngine.Random -> System.Random (rnd)를 사용하여 시드 기반 결정론적 위치 선택
+        var pick = cand[rnd.Next(0, cand.Count)];
+
         _plannedExitGatePos = pick.transform.position; // 위치만 기억
         return true;
     }
@@ -845,6 +888,7 @@ public class RoomController : MonoBehaviour
         if (!exitGatePrefab) return null;
         var eg = Instantiate(exitGatePrefab, pos, Quaternion.identity, brickRoot);
         _exitGateInstance = eg;
+        DungeonRunState.RememberExitGatePos(_currentKey, pos);
         return eg;
     }
 }
