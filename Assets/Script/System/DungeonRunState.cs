@@ -50,12 +50,14 @@ public static class DungeonRunState
 
     // --- 초기화 및 리셋 메서드 ---
 
-    // 시스템 초기화 메서드 (IsInitialized = true로 설정)
+    /// <summary>
+    /// 시스템 초기화 메서드. 게임 세션 당 한 번만 호출되어야 하며, 이후 Reset()으로 상태를 재설정합니다.
+    /// </summary>
     public static void Initialize()
     {
         if (IsInitialized)
         {
-            Debug.LogWarning("DungeonRunState is already initialized.");
+            // Debug.LogWarning("DungeonRunState is already initialized."); // 중복 호출 경고는 삭제 (혼동 방지)
             return;
         }
 
@@ -65,11 +67,14 @@ public static class DungeonRunState
         Debug.Log("DungeonRunState Initialized successfully.");
     }
 
-    // 게임 시작 시 모든 상태를 초기화합니다.
+    /// <summary>
+    /// 게임 시작 시 또는 던전 재시작 시 모든 상태를 초기화합니다.
+    /// </summary>
     public static void Reset()
     {
-        // 초기화 상태 재설정
-        IsInitialized = false;
+        // IsInitialized 플래그는 유지 (시스템 초기화 자체는 한번만 수행됨)
+        // 만약 DungeonRunState를 완전히 재설정해야 한다면 IsInitialized=false로 재설정할 수 있으나,
+        // 현재 구조는 상태 클리어에 초점을 맞춥니다.
 
         _configured = false;
         _mode = ExitScheduleMode.ForceNthUnique;
@@ -78,6 +83,8 @@ public static class DungeonRunState
         _snapshots.Clear();
         _visitedRooms.Clear();
         _exitRoomKey = default; // RoomKey 기본값으로 초기화
+
+        // Reset이 완료된 후에도 시스템 자체는 초기화(IsInitialized = true) 상태를 유지하도록 플래그 제거
     }
 
     // --- 던전 설정 메서드 ---
